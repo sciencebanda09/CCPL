@@ -8,9 +8,9 @@ obtain observations and costs from the environment.
 
 At step (t), the logical transition is
 
-\[
+$$
 \mathcal{T}_t=(s_t,a_t,r_t,s_{t+1},c_t,\mathrm{done}_t,\mathrm{info}_t).
-\]
+$$
 
 | Field | Type | Meaning |
 | --- | --- | --- |

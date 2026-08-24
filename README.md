@@ -13,12 +13,12 @@ The method has four implementation components:
    dependent effective discount factor instead of assigning every observed
    cost to the most recent action.
 2. **State-conditioned multipliers.** The constrained policy uses a multiplier
-   \(\lambda(s)\) rather than one scalar penalty for all states.
+$\lambda(s)$ rather than one scalar penalty for all states.
 3. **Interventional consequence attribution.** The Consequence Net estimates
    action-level contribution from interventional labels supplied by a
    controlled structural causal model (SCM).
 4. **Separate critics.** Reward and constraint value functions have separate
-   parameters and TD targets, so changing \(\lambda\) does not change either
+parameters and TD targets, so changing $\lambda$ does not change either
    critic's target.
 
 CCPL is research software. The theoretical statements are conditional: the
@@ -84,15 +84,15 @@ control and audit mechanism; it is not a safety certificate.
 
 ## Mathematical specification
 
-Let \(p(\tau\mid h)\) be a delay distribution over
-\(\tau\in\{0,\ldots,K\}\), conditional on history \(h\). CCPL uses
+Let $p(\tau\mid h)$ be a delay distribution over
+$\tau\in\{0,\ldots,K\}$, conditional on history $h$. CCPL uses
 
-\[
+$$
 \gamma_{\mathrm{eff}}(h)
   = \sum_{\tau=0}^{K} p(\tau\mid h)\gamma^{\tau}.
-\]
+$$
 
-Therefore \(\gamma^K\leq\gamma_{\mathrm{eff}}(h)\leq 1\). A contraction
+Therefore $\gamma^K\leq\gamma_{\mathrm{eff}}(h)\leq 1$. A contraction
 modulus strictly below one does not follow from an arbitrary unknown delay
 distribution: an assumption excluding zero delay, or an equivalent bound, is
 required. The complete scope and assumptions are in

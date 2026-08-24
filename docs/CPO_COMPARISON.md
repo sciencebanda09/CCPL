@@ -59,7 +59,7 @@ Use the official task name. `SafetyPointGoal1` is not the historical CPO
 
 ## Metrics
 
-Report per-seed values and mean (\pm\) standard deviation for:
+Report per-seed values and mean $\pm$ standard deviation for:
 
 - episode reward;
 - discounted and undiscounted consequence;
