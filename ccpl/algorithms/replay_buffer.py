@@ -18,7 +18,6 @@ class Transition:
  
     @property
     def priority(self):
-        # Raw; normalized at sample time
         return abs(self.td_error) + abs(self.c_error) + self.uncertainty + 1e-6
  
  
@@ -32,17 +31,16 @@ class ReplayBuffer:
         self._beta_start = float(beta_p)
         self._beta_frames = max(int(beta_frames), 1)
         self._total_pushes = 0
-        self.w_td     = w_td      # weight for normalized TD error
-        self.w_c      = w_c       # weight for normalized consequence error
-        self.w_u      = w_u       # weight for normalized uncertainty
-        self.gru_dim  = gru_dim   # FIX-B1: stored for use in push()
+        self.w_td     = w_td
+        self.w_c      = w_c
+        self.w_u      = w_u
+        self.gru_dim  = gru_dim
         self.rng      = np.random.default_rng(seed)
         self._buf: list[Transition] = []
         self._pos = 0
  
     def push(self, state, action, reward, next_state, consequence, done,
              hidden=None, next_hidden=None):
-        # FIX-B1: use self.gru_dim instead of the old magic constant 64
         h  = (np.zeros(self.gru_dim, np.float32)
               if hidden is None else np.asarray(hidden).squeeze())
         nh = (np.zeros(self.gru_dim, np.float32)
@@ -78,14 +76,9 @@ class ReplayBuffer:
  
         priorities = self._normalized_priorities(eligible)
  
-        # FIX-B2: clip to minimum eps before normalising so no entry is
-        # exactly zero, and re-normalise to guarantee sum == 1.0 exactly.
         priorities = np.clip(priorities, 1e-8, None)
         probs      = priorities / priorities.sum()
  
-        # These importance weights use the standard with-replacement sampling
-        # probability.  Without-replacement PER needs different inclusion
-        # probabilities and the former weights were therefore biased.
         idxs    = self.rng.choice(len(eligible), batch_size, replace=True, p=probs)
         n       = len(eligible)
         weights = (n * probs[idxs]) ** (-self.beta_p)

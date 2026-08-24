@@ -10,13 +10,10 @@ import numpy as np
 
 try:
     from .networks import Adam, MLP, softmax
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import Adam, MLP, softmax
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 1.  Delay Estimator Network
-# ─────────────────────────────────────────────────────────────────────────────
 
 class DelayEstimatorNet:
     """
@@ -40,7 +37,6 @@ class DelayEstimatorNet:
         self.net   = MLP([gru_dim, hidden_dim, hidden_dim, self.n_classes], rng, scale=0.05)
         self.optim = Adam(self.net.all_params(), lr=lr)
 
-    # ── Forward ───────────────────────────────────────────────────────────────
 
     def forward(self, hidden: np.ndarray) -> np.ndarray:
         """
@@ -75,7 +71,6 @@ class DelayEstimatorNet:
         mu = (probs * taus[None, :]).sum(axis=-1, keepdims=True)
         return (probs * (taus[None, :] - mu)**2).sum(axis=-1)
 
-    # ── Training ──────────────────────────────────────────────────────────────
 
     def update(self, hiddens: np.ndarray, observed_delays: np.ndarray,
                weights: np.ndarray = None) -> float:
@@ -119,9 +114,6 @@ class DelayEstimatorNet:
         return self.net.all_params()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2.  Temporal Consequence Estimator
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TemporalConsequenceEstimator:
     """
@@ -141,7 +133,7 @@ class TemporalConsequenceEstimator:
     """
 
     def __init__(self, delay_net: DelayEstimatorNet,
-                 consequence_net,          # MultiHorizonConsequenceNet
+                 consequence_net,
                  tau_max:   int   = 15,
                  tau_short: float = 3.0,
                  tau_mid:   float = 8.0,
@@ -181,7 +173,7 @@ class TemporalConsequenceEstimator:
         """
         B = len(actions)
 
-        delay_probs = self.delay_net.forward(hiddens)  # (B, n_classes)
+        delay_probs = self.delay_net.forward(hiddens)
 
         C_tot, C_short, C_mid, C_long, sigma = self.consequence_net.forward(
             states, actions)
@@ -201,9 +193,6 @@ class TemporalConsequenceEstimator:
         return expected_C, uncertainty
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3.  Sparse Consequence Store
-# ─────────────────────────────────────────────────────────────────────────────
 
 class SparseConsequenceStore:
     """
@@ -245,7 +234,6 @@ class SparseConsequenceStore:
         self._running_count = 0
         self._ready:        list = []
 
-    # ── Recording ─────────────────────────────────────────────────────────────
 
     def record(self, state: np.ndarray, action: int,
                hidden: np.ndarray, t: int):
@@ -305,7 +293,6 @@ class SparseConsequenceStore:
         slot["aligned"] = True
         self._ready.append(slot.copy())
 
-    # ── FIX-V6-7: bounded observation cache ───────────────────────────────────
 
     def flush_old_observations(self, cutoff_t: int):
         """
@@ -321,12 +308,10 @@ class SparseConsequenceStore:
         self._observations = [item for item in self._observations
                               if item[0] >= cutoff_t]
 
-    # ── Alignment ─────────────────────────────────────────────────────────────
 
     def _align(self):
         """Compatibility no-op: observations are aligned explicitly on input."""
 
-    # ── Retrieval ─────────────────────────────────────────────────────────────
 
     def get_aligned_batch(self, min_batch: int = 32) -> dict | None:
         """
@@ -366,9 +351,6 @@ class SparseConsequenceStore:
         return len(self._ready)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4.  Delay-aware consequence update helper
-# ─────────────────────────────────────────────────────────────────────────────
 
 def update_delay_and_consequence(
     delay_net:       DelayEstimatorNet,

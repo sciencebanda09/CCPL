@@ -28,8 +28,6 @@ class ConsequenceVarianceEstimator:
         state = np.asarray(state, np.float64).reshape(-1)
         if state.size == 0:
             return 0
-        # Use a stable low-dimensional risk projection without assuming a
-        # six-coordinate state (Safety Gymnasium observations differ by task).
         indices = sorted(set((0, min(1, state.size - 1), min(5, state.size - 1))))
         risk = float(np.mean(np.clip(state[indices], 0.0, 1.0)))
         return min(int(risk * self.n_bins), self.n_bins - 1)

@@ -15,7 +15,6 @@ networks_v7.py. No external dependencies beyond numpy required.
 import numpy as np
 
 
-# ── Abstraction Layer (Cognitive CCPL §7) ─────────────────────────────────────
 
 class AbstractionLayer:
     """
@@ -41,8 +40,8 @@ class AbstractionLayer:
                  seed: int = 42):
         self.state_dim        = state_dim
         self.n_prototypes     = n_prototypes
-        self.alpha            = alpha            # amplification strength
-        self.danger_threshold = danger_threshold # min consequence to absorb
+        self.alpha            = alpha
+        self.danger_threshold = danger_threshold
 
         self._centroids  = np.zeros((n_prototypes, state_dim), np.float32)
         self._danger_avg = np.zeros(n_prototypes, np.float32)
@@ -61,14 +60,12 @@ class AbstractionLayer:
         s = np.asarray(state, np.float32)
 
         if self._filled < self.n_prototypes:
-            # Claim a new prototype slot
             idx = self._filled
             self._centroids[idx]  = s
             self._danger_avg[idx] = c
             self._counts[idx]     = 1.0
             self._filled         += 1
         else:
-            # Nudge the nearest centroid toward this dangerous state
             dists = np.linalg.norm(self._centroids - s[None], axis=1)
             idx   = int(np.argmin(dists))
             n     = self._counts[idx]
@@ -99,7 +96,6 @@ class AbstractionLayer:
         return 1.0 + self.alpha * self.similarity(state)
 
 
-# ── Working Memory → Lambda Modifier (Cognitive CCPL §6.2) ───────────────────
 
 class WorkingMemoryLambdaModifier:
     """

@@ -7,7 +7,7 @@ class BaseEnv:
     ACTION_LABELS = ("DEFER", "PARTIAL", "FULL", "INVEST", "REBALANCE")
     state_dim  = 6
     action_dim = 5
-    constraint_threshold = 3.0   # J_c budget: episodes above this count as violations
+    constraint_threshold = 3.0
     scm_labels_valid = False
 
     def __init__(self, max_steps=100, consequence_delay=5, noise_std=0.05,
@@ -81,7 +81,7 @@ class BaseEnv:
     def _get_delayed_consequence(self, immediate_c):
         self._consequence_queue.append(immediate_c)
         if len(self._consequence_queue) > self.consequence_delay:
-            actual_tau = self.consequence_delay   # exact delay, not a heuristic
+            actual_tau = self.consequence_delay
             self._last_actual_tau = actual_tau
             return self._consequence_queue.pop(0)
         self._last_actual_tau = None
@@ -106,17 +106,11 @@ class BaseEnv:
             self._last_actual_tau is not None and delayed_c > 0.0)
         delay_supervision_valid = self._last_actual_tau is not None
 
-        # Do not silently discard costs generated in the final delay window.
-        # They belong to actions in this episode even though their observation
-        # would otherwise fall beyond the artificial time limit.
         if self._done and self._consequence_queue:
             pending = self._consequence_queue
             delayed_c += float(np.sum(pending))
             self._delayed_hits += int(np.count_nonzero(np.asarray(pending) > 0.0))
             self._consequence_queue = []
-            # A single scalar label cannot represent the several delays that
-            # were flushed together, so exclude this transition from delay-net
-            # supervision.
             delay_supervision_valid = False
 
         if ns[0] >= 0.98:
@@ -131,7 +125,6 @@ class BaseEnv:
 
         self._total_reward      += reward
         self._total_consequence += delayed_c
-        # Expose actual_tau so delay net can be trained on ground truth
         info.update({"step": self._step, "delayed_hits": self._delayed_hits,
                      "total_reward": self._total_reward,
                      "total_consequence": self._total_consequence,
@@ -149,8 +142,6 @@ class BaseEnv:
         self._total_reward += float(reward) - float(base_reward)
         self._total_consequence += float(cost) - float(base_cost)
         if not np.isclose(cost, base_cost):
-            # The returned scalar now combines events with different source
-            # times, so it is not a valid categorical delay label.
             info["actual_tau"] = None
             info["delay_supervision_valid"] = False
         if delayed_event and cost > base_cost:
@@ -182,9 +173,6 @@ class NoisyEnv(BaseEnv):
     def step(self, action):
         ns, r, c, done, info = super().step(action)
         obs = np.clip(ns + self.rng.normal(0, 0.10, self.state_dim).astype(np.float32), 0, 1)
-        # Expose noisy observation to the policy but keep self._state clean
-        # so the next _transition() starts from the true (noiseless) state.
-        # Do NOT overwrite self._state — that compounds noise across steps.
         return obs, r, c, done, info
 
 
@@ -195,9 +183,6 @@ class ShiftedConsequenceEnv(BaseEnv):
         super().__init__(consequence_delay=10, noise_std=0.08, **kw)
     def _transition(self, action):
         ns, reward, consequence, info = super()._transition(action)
-        # Modify the consequence at its source, before BaseEnv queues it.
-        # The former step() override rescaled whichever old consequence happened
-        # to be emitted while looking at the *current* action.
         if action == 2 and ns[1] > 0.5:
             consequence *= 1.8
         if (self._step + 1) % 15 == 0:
@@ -211,10 +196,6 @@ class RandomisedEnv(BaseEnv):
 
     def __init__(self, **kw):
         super().__init__(noise_std=0.10, **kw)
-        # FIX-B11: initialise _shock_interval to a safe default so that any
-        # code path that reaches step() before reset() doesn't raise
-        # AttributeError.  reset() will always overwrite this with a fresh
-        # random value before the first episode begins.
         self._shock_interval = 20
 
     def reset(self):
@@ -294,11 +275,9 @@ class DeceptiveRewardEnv(BaseEnv):
             self._deception_acc += 0.3
         if self._step % self.deception_window == 0 and self._deception_acc > 0:
             c += min(self._deception_acc * self.penalty_burst, 3.0)
-            self._deception_acc = 0.0   # full reset: burst consumed, no bleed-through
+            self._deception_acc = 0.0
             delayed_event = True
         if done and self._deception_acc > 0:
-            # Account for latent penalties caused inside the episode even when
-            # the artificial horizon arrives before the next burst boundary.
             c += min(self._deception_acc * self.penalty_burst, 3.0)
             self._deception_acc = 0.0
             delayed_event = True

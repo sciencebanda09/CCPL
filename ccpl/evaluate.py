@@ -20,11 +20,10 @@ import time
 import numpy as np
 try:
     from .environments import ENV_REGISTRY
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from environments import ENV_REGISTRY
 
 
-# ── Single-agent, single-environment evaluation ───────────────────────────────
 
 def evaluate_agent(agent, env_name: str, n_episodes: int = 100,
                    max_steps: int = 100, delay_steps: int = 5,
@@ -51,7 +50,6 @@ def evaluate_agent(agent, env_name: str, n_episodes: int = 100,
             f"Environment '{env_name}' not in ENV_REGISTRY. "
             f"Import adversarial_envs to register adversarial environments.")
 
-    # Resolve constraint threshold
     if constraint_threshold is None:
         env_sample        = EnvClass(max_steps=1, seed=0)
         constraint_threshold = getattr(env_sample, "constraint_threshold", float("inf"))
@@ -129,7 +127,6 @@ def evaluate_agent(agent, env_name: str, n_episodes: int = 100,
     }
 
 
-# ── Multi-agent, multi-environment evaluation ─────────────────────────────────
 
 def evaluate_all(agents: dict, env_names: list,
                  n_episodes: int = 100, max_steps: int = 100,
@@ -154,7 +151,6 @@ def evaluate_all(agents: dict, env_names: list,
     return results
 
 
-# ── Transfer score ────────────────────────────────────────────────────────────
 
 def compute_transfer_score(results: dict, env_names: list) -> dict:
     """
@@ -173,7 +169,6 @@ def compute_transfer_score(results: dict, env_names: list) -> dict:
     }
 
 
-# ── Print helpers ─────────────────────────────────────────────────────────────
 
 def print_csr_table(results: dict, env_names: list):
     """Print constraint satisfaction rate table."""
@@ -235,7 +230,6 @@ def print_benchmark_table(results: dict, env_names: list,
         print_csr_table(results, env_names)
 
 
-# ── Multi-seed runner ─────────────────────────────────────────────────────────
 
 def run_multiseed(build_fn, train_fn, n_seeds: int = 10,
                   seed_base: int = 0, summary_window: int = 50,
@@ -261,8 +255,6 @@ def run_multiseed(build_fn, train_fn, n_seeds: int = 10,
     agg = {}
     from stats import bootstrap_ci
     for key in ("rewards", "consequences", "delayed_hits"):
-        # One summary per independently trained model is the replicate.  A
-        # single last episode is too noisy, so use a fixed final window.
         vals = [float(np.mean(h[key][-summary_window:])) for h in all_histories]
         mean, ci_lo, ci_hi = bootstrap_ci(vals, seed=seed_base)
         agg[key] = {

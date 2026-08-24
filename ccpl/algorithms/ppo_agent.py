@@ -3,7 +3,7 @@ import numpy as np
 try:
     from .networks import ActorNetwork, CriticNetwork, softmax
     from .normalizer import StateNormalizer
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import ActorNetwork, CriticNetwork, softmax
     from normalizer import StateNormalizer
 
@@ -48,9 +48,6 @@ class PPOAgent:
         return self.actor.sample(s)
 
     def store(self, state, action, reward, next_state, consequence, done):
-        # ``s`` must match the representation used to choose the action.  The
-        # next observation will be consumed after the current-state statistics
-        # are incorporated, so normalise it after that update.
         s  = self.normalizer.normalize(state)
         lp = self._log_prob(s[None], np.array([action])).item()
         self.normalizer.update(state)
@@ -97,9 +94,6 @@ class PPOAgent:
                 adv_mb  = adv[mb]; ret_mb = returns[mb]; olp_mb = OLP[mb]
                 W_mb    = np.ones(len(mb), np.float32)
 
-                # FIX: skip mini-batch if advantages or returns contain inf/nan
-                # (happens after many episodes when stale rollout data crosses
-                # episode boundaries and produces extreme return estimates)
                 if (not np.all(np.isfinite(adv_mb))
                         or not np.all(np.isfinite(ret_mb))):
                     continue
@@ -112,7 +106,6 @@ class PPOAgent:
                 vals_mb = self.critic.value(s_mb)
                 v_loss  = np.mean((ret_mb - vals_mb)**2)
 
-                # Full backprop for actor and critic
                 self.actor.backward_ppo(
                     s_mb, a_mb, adv_mb, olp_mb, self.clip_eps, W_mb,
                     entropy_coeff=self.entropy_coeff)

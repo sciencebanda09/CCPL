@@ -112,9 +112,6 @@ def _build_all_baselines(seed):
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E1 — Full Baseline Comparison
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E1(args):
     _sep("E1 — Full Baseline Comparison (9 agents × 6 envs × seeds)")
@@ -130,7 +127,6 @@ def run_E1(args):
         _sep(f"  Seed {seed_i+1}/{args.seeds}  (seed={seed})")
         agents = _build_all_baselines(seed)
 
-        # Train
         for name, agent in agents.items():
             print(f"  Training {name}...")
             h = train_agent(agent, n_episodes=args.episodes, max_steps=args.max_steps,
@@ -140,13 +136,11 @@ def run_E1(args):
                             env_names=list(TRAIN_ENVS))
             all_histories.setdefault(name, []).append(h)
 
-        # Evaluate
         res = evaluate_all(agents, eval_envs, args.eval_episodes,
                            args.max_steps, args.delay)
         for name, r in res.items():
             all_results.setdefault(name, []).append(r)
 
-    # Average across seeds
     def _avg(res_list, envs):
         return {e: {k: float(np.mean([r[e][k] for r in res_list]))
                     for k in res_list[0][e]
@@ -159,7 +153,6 @@ def run_E1(args):
     print_benchmark_table(averaged, eval_envs, xfer)
     print_csr_table(averaged, eval_envs)
 
-    # Statistical significance: CCPL vs each baseline
     _sep("  Seed-level Statistical Tests (trained seed is the replicate)")
     ccpl_rewards = [
         float(np.mean([seed_result[e]["mean_reward"] for e in eval_envs]))
@@ -189,7 +182,6 @@ def run_E1(args):
            "seed_values": [args.seed + i * 100 for i in range(args.seeds)],
            "transfer": xfer}, "E1_results", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
     flat_histories = {name: hlist[-1] for name, hlist in all_histories.items()}
     generate_all_plots(
         histories          = flat_histories,
@@ -202,9 +194,6 @@ def run_E1(args):
     return averaged, all_histories
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E2 — Ablation Study
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E2(args):
     _sep("E2 — Ablation: Contribution of Each Direction")
@@ -264,15 +253,11 @@ def run_E2(args):
            "seed_values": [args.seed + i * 100 for i in range(args.seeds)],
            "transfer": xfer}, "E2_ablation", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
     plot_ablation_comparison(averaged, eval_envs, out)
     plot_final_ranking(averaged, eval_envs, out)
     return averaged
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E3 — Causal Attribution Accuracy
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E3(args):
     _sep("E3 — ICN Agreement with the Synthetic One-Step SCM Reference")
@@ -283,8 +268,6 @@ def run_E3(args):
     labgen = CausalLabelGenerator(scm)
     rng    = np.random.default_rng(args.seed)
     action_names = ["DEFER", "PARTIAL", "FULL", "INVEST", "REBALANCE"]
-    # Reuse one held-out set at every checkpoint.  Drawing a new set for each
-    # model confounds training progress with test-set sampling variation.
     heldout_states = rng.uniform(
         0.1, 0.9, (500, STATE_DIM)).astype(np.float32)
     heldout_actions = rng.integers(
@@ -314,7 +297,6 @@ def run_E3(args):
         corr    = float(np.corrcoef(delta_C, scm_dc)[0, 1])
         sign_ag = float(np.mean(np.sign(delta_C) == np.sign(scm_dc)))
 
-        # Per-action breakdown
         per_action = {}
         for a in range(ACTION_DIM):
             mask = actions == a
@@ -349,8 +331,6 @@ def run_E3(args):
 
     _save(results_by_episodes, "E3_causal_accuracy", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
-    # Plot ICN vs SCM correlation over training checkpoints
     import matplotlib; matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     os.makedirs(out, exist_ok=True)
@@ -372,9 +352,6 @@ def run_E3(args):
     return results_by_episodes
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E4 — Delay Distribution Calibration
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E4(args):
     _sep("E4 — Delay Distribution Calibration: P(τ|h) vs Observed Delays")
@@ -384,12 +361,10 @@ def run_E4(args):
     from environments import StandardEnv, ShiftedConsequenceEnv
     agent = make_ccpl(STATE_DIM, ACTION_DIM, seed=args.seed, pretrain_steps=200)
 
-    # Train
     for ep in range(min(args.episodes, 300)):
         env = StandardEnv(max_steps=100, seed=ep)
         run_episode(agent, env, train=True)
 
-    # Collect observed vs predicted delays
     observed_taus  = []
     predicted_taus = []
 
@@ -441,7 +416,6 @@ def run_E4(args):
         result = {"note": "Insufficient consequence observations in test episodes."}
         print("  Note: Low consequence frequency in test environment.")
 
-    # Show delay distribution shape
     rng    = np.random.default_rng(0)
     h_test = rng.standard_normal((32, agent.gru_dim)).astype(np.float32)
     probs  = agent.delay_dist.forward(h_test).mean(0)
@@ -452,7 +426,6 @@ def run_E4(args):
 
     _save(result, "E4_delay_calibration", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
     import matplotlib; matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(8, 4))
@@ -467,9 +440,6 @@ def run_E4(args):
     return result
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E5 — Adversarial Robustness
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E5(args):
     _sep("E5 — Adversarial Robustness (3 adversarial environments)")
@@ -484,7 +454,6 @@ def run_E5(args):
         "CCPL-Base":make_ccpl_base(STATE_DIM, ACTION_DIM, seed=args.seed),
     }
 
-    # Phase 1: Train all agents on standard envs
     for name, agent in agents.items():
         print(f"  Training {name} on standard envs...")
         train_agent(agent, n_episodes=args.episodes, max_steps=args.max_steps,
@@ -492,8 +461,6 @@ def run_E5(args):
                     verbose=args.verbose, log_freq=max(1, args.episodes // 4),
                     env_names=list(TRAIN_ENVS))
 
-    # Evaluate every method zero-shot.  Giving only CCPL-Base additional
-    # adversarial training made the comparison neither zero-shot nor fair.
     results = evaluate_all(agents, adv_envs, args.eval_episodes,
                            args.max_steps, args.delay)
     ts      = compute_transfer_score(results, adv_envs)
@@ -511,16 +478,12 @@ def run_E5(args):
     _save({"results": {n: {e: v for e, v in r.items()} for n, r in results.items()},
            "transfer": ts}, "E5_adversarial", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
     plot_unseen_transfer(results, adv_envs, out)
     plot_transfer_score(ts, out, title="E5 — Adversarial Robustness Transfer Score")
     plot_per_env_ranking(results, adv_envs, out)
     return results
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E6 — Sample Efficiency
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E6(args):
     _sep("E6 — Sample Efficiency: Reward & CSR vs Training Steps")
@@ -570,7 +533,6 @@ def run_E6(args):
 
     _save(efficiency, "E6_sample_efficiency", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
     import matplotlib; matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -596,9 +558,6 @@ def run_E6(args):
     return efficiency
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E7 — Zero-Shot Transfer
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E7(args):
     _sep("E7 — Zero-Shot Transfer to Unseen Environments")
@@ -650,8 +609,6 @@ def run_E7(args):
     _save({n: r["retention"] for n, r in all_transfer.items()},
           "E7_transfer", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
-    # Build transfer results dict compatible with plot_unseen_transfer
     unseen_plot = {name: res.get("transfer", {}) for name, res in all_transfer.items()}
     transfer_envs_list = list(UNSEEN_ENVS[:4])
     plot_unseen_transfer(unseen_plot, transfer_envs_list, out)
@@ -660,9 +617,6 @@ def run_E7(args):
     return all_transfer
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Theory verification run (standalone)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_theory_verification(args):
     _sep("Implementation and Empirical Diagnostics (Not Theorem Verification)")
@@ -690,9 +644,6 @@ def run_theory_verification(args):
     return checks
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E8 — Optional Safety Gymnasium evaluation
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E8(args):
     """
@@ -750,8 +701,6 @@ def run_E8(args):
         seed = args.seed + seed_i * 100
         _sep(f"  Seed {seed_i+1}/{args.seeds}  (seed={seed})")
 
-        # Build a probe env to get state_dim for this task set
-        # (Safety Gym envs have different obs dims per task)
         task_results = {}
 
         for task_name in sg_tasks:
@@ -765,7 +714,6 @@ def run_E8(args):
 
             print(f"    state_dim={sg_state_dim}  action_dim={sg_action_dim}")
 
-            # Build agents sized for this task's observation space
             sg_agents = {
                 "CCPL":     make_ccpl(sg_state_dim, sg_action_dim, seed=seed,
                                       pretrain_steps=0, constraint_d=cost_budget),
@@ -778,7 +726,6 @@ def run_E8(args):
                 "CCPL-Base":make_ccpl_base(sg_state_dim, sg_action_dim, seed=seed),
             }
 
-            # Train each agent on this Safety Gym task
             for name, agent in sg_agents.items():
                 print(f"    Training {name} on {task_name}...")
                 ep_rewards, ep_costs, ep_csrs = [], [], []
@@ -805,7 +752,6 @@ def run_E8(args):
             if hasattr(shared_env, "close"):
                 shared_env.close()
 
-                # Held-out evaluation with disjoint environment seeds.
                 eval_rewards, eval_costs, eval_costs_raw, eval_csrs = [], [], [], []
                 for eval_ep in range(args.eval_episodes):
                     eval_seed = seed + 1_000_000 + eval_ep
@@ -839,7 +785,6 @@ def run_E8(args):
 
         all_results.setdefault("seed_results", []).append(task_results)
 
-    # Average across seeds
     averaged = {}
     for task in sg_tasks:
         averaged[task] = {}
@@ -858,7 +803,6 @@ def run_E8(args):
                                                                       for d in seed_data])), 2),
             }
 
-    # Print summary table
     _sep("  E8 Results Summary")
     for task, res in averaged.items():
         print(f"\n  Task: {task}")
@@ -871,7 +815,6 @@ def run_E8(args):
     _save({"averaged": averaged, "seed_results": all_results.get("seed_results", [])},
           "E8_safety_gym", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
     import matplotlib; matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from plots import COLORS, _smooth
@@ -879,7 +822,6 @@ def run_E8(args):
     agent_names = ["CCPL", "CPO-FO", "PPO", "SAC-Lag", "CCPL-Base"]
     n_tasks = len(sg_tasks)
 
-    # Plot 1: Reward per task per agent
     fig, axes = plt.subplots(1, n_tasks, figsize=(6 * n_tasks, 5), sharey=False)
     if n_tasks == 1: axes = [axes]
     for ax, task in zip(axes, sg_tasks):
@@ -895,7 +837,6 @@ def run_E8(args):
     fig.savefig(f"{out}/E8_reward_per_task.png", dpi=150, bbox_inches="tight"); plt.close(fig)
     print(f"  Saved: {out}/E8_reward_per_task.png")
 
-    # Plot 2: CSR per task per agent
     fig, axes = plt.subplots(1, n_tasks, figsize=(6 * n_tasks, 5), sharey=True)
     if n_tasks == 1: axes = [axes]
     for ax, task in zip(axes, sg_tasks):
@@ -911,7 +852,6 @@ def run_E8(args):
     fig.savefig(f"{out}/E8_csr_per_task.png", dpi=150, bbox_inches="tight"); plt.close(fig)
     print(f"  Saved: {out}/E8_csr_per_task.png")
 
-    # Plot 3: Reward vs J_c scatter across all tasks
     fig, ax = plt.subplots(figsize=(9, 6))
     for name in agent_names:
         for task in sg_tasks:
@@ -928,7 +868,6 @@ def run_E8(args):
     fig.savefig(f"{out}/E8_reward_vs_jc.png", dpi=150, bbox_inches="tight"); plt.close(fig)
     print(f"  Saved: {out}/E8_reward_vs_jc.png")
 
-    # Plot 4: Learning curves per task (last seed)
     last_seed = all_results.get("seed_results", [{}])[-1]
     for task in sg_tasks:
         task_data = last_seed.get(task, {})
@@ -950,9 +889,6 @@ def run_E8(args):
     return averaged
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# E9 — Safety Gymnasium Ablation (D1/D2/D3 on Safety Gym tasks)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_E9(args):
     """
@@ -970,9 +906,6 @@ def run_E9(args):
     out = os.path.join(args.out, "E9")
     os.makedirs(out, exist_ok=True)
 
-    # Three configured tasks with different agents/objectives.  Because the
-    # official API supplies immediate observational costs, this experiment does
-    # not identify causal effects or isolate a delayed-feedback benefit.
     e9_tasks = ["SafetyPointGoal1", "SafetyPointGoal2", "SafetyPointButton1"]
     e9_tasks = [t for t in e9_tasks if t in SAFETY_GYM_ENV_REGISTRY]
     if not e9_tasks:
@@ -980,7 +913,6 @@ def run_E9(args):
         return {}
     print(f"  Ablation tasks: {e9_tasks}")
 
-    # all_results: {task_name: {variant_name: [seed0_dict, seed1_dict, ...]}}
     all_results = {task: {} for task in e9_tasks}
 
     for task_name in e9_tasks:
@@ -1035,7 +967,6 @@ def run_E9(args):
                     "training_rewards": [round(float(x), 4) for x in ep_rewards],
                 })
 
-    # Average across seeds per task
     averaged = {}
     for task_name in e9_tasks:
         averaged[task_name] = {
@@ -1047,7 +978,6 @@ def run_E9(args):
             for n, v in all_results[task_name].items()
         }
 
-    # Print summary per task
     for task_name, res in averaged.items():
         _sep(f"  E9 Ablation Summary — {task_name}")
         print(f"  {'Variant':<20}  {'Reward':>8}  {'CSR%':>7}")
@@ -1060,14 +990,12 @@ def run_E9(args):
     _save({"tasks": e9_tasks, "results": averaged,
            "seed_results": all_results}, "E9_safety_gym_ablation", out)
 
-    # ── Generate plots ────────────────────────────────────────────────────
     import matplotlib; matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from plots import COLORS
 
     n_tasks = len(e9_tasks)
 
-    # Plot 1: Reward per ablation variant × task (one subplot per task)
     fig, axes = plt.subplots(1, n_tasks, figsize=(7 * n_tasks, 5), sharey=False)
     if n_tasks == 1: axes = [axes]
     for ax, task_name in zip(axes, e9_tasks):
@@ -1086,7 +1014,6 @@ def run_E9(args):
     fig.savefig(f"{out}/E9_ablation_reward_per_task.png", dpi=150, bbox_inches="tight")
     plt.close(fig); print(f"  Saved: {out}/E9_ablation_reward_per_task.png")
 
-    # Plot 2: CSR per ablation variant × task
     fig, axes = plt.subplots(1, n_tasks, figsize=(7 * n_tasks, 5), sharey=True)
     if n_tasks == 1: axes = [axes]
     for ax, task_name in zip(axes, e9_tasks):
@@ -1105,8 +1032,6 @@ def run_E9(args):
     fig.savefig(f"{out}/E9_ablation_csr_per_task.png", dpi=150, bbox_inches="tight")
     plt.close(fig); print(f"  Saved: {out}/E9_ablation_csr_per_task.png")
 
-    # Plot 3: ΔReward vs CCPL-Base per variant, one line per task
-    # Shows whether D1/D2/D3 contributions are consistent across tasks
     fig, ax = plt.subplots(figsize=(10, 5))
     variant_names = list(next(iter(averaged.values())).keys())
     x = np.arange(len(variant_names))
@@ -1133,9 +1058,6 @@ def run_E9(args):
     return averaged
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CLI
-# ─────────────────────────────────────────────────────────────────────────────
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="CCPL Extended Experiment Suite")

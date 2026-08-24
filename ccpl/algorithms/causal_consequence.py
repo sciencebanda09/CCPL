@@ -27,13 +27,10 @@ constraint-satisfaction theorem follows from this estimator alone.
 import numpy as np
 try:
     from .networks import Adam, Linear, MLP, sigmoid, softplus
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import Adam, Linear, MLP, sigmoid, softplus
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Causal History Encoder
-# ─────────────────────────────────────────────────────────────────────────────
 
 class CausalHistoryEncoder:
     """
@@ -53,7 +50,6 @@ class CausalHistoryEncoder:
         self.action_dim  = action_dim
         self.state_dim   = state_dim
 
-        # Rolling history buffer: list of (state, action, consequence)
         self._history: list = []
         self._h = np.zeros((1, hidden_dim), np.float32)
 
@@ -136,9 +132,6 @@ class CausalHistoryEncoder:
         return []
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Interventional Consequence Net
-# ─────────────────────────────────────────────────────────────────────────────
 
 class InterventionalConsequenceNet:
     """
@@ -161,7 +154,7 @@ class InterventionalConsequenceNet:
     """
 
     def __init__(self, state_dim: int, action_dim: int,
-                 causal_dim: int = 32,      # causal history encoding dim
+                 causal_dim: int = 32,
                  hidden_dim: int = 64,
                  n_layers:   int = 2,
                  history_len: int = 8,
@@ -173,33 +166,25 @@ class InterventionalConsequenceNet:
         self.history_len = history_len
         self.causal_dim  = causal_dim
 
-        # Causal history encoder
         self.encoder = CausalHistoryEncoder(
             state_dim, action_dim, causal_dim, history_len, lr, seed)
 
-        # Total consequence head: (state + one_hot_action + causal_ctx) → C
         total_inp = state_dim + action_dim + causal_dim
         self.total_trunk = MLP(
             [total_inp] + [hidden_dim]*n_layers, rng)
         self.total_head  = Linear(hidden_dim, 1, rng, scale=0.01)
 
-        # Same-state action baseline. Conditioning on state is necessary to
-        # avoid treating state risk as an action effect; the previous
-        # history-only head could not fit its state-dependent SCM targets.
         self.base_trunk = MLP(
             [state_dim + causal_dim] + [hidden_dim]*n_layers, rng)
         self.base_head  = Linear(hidden_dim, 1, rng, scale=0.01)
 
-        # Heteroscedastic error-scale head.  A single deterministic network
-        # cannot by itself identify epistemic uncertainty.
         self.sigma_head = Linear(hidden_dim, 1, rng, scale=0.01)
 
-        # Split optimizers: base path needs faster learning to stay calibrated
         total_p = (self.total_trunk.all_params() + self.total_head.params()
                    + self.sigma_head.params())
         base_p  = (self.base_trunk.all_params()  + self.base_head.params())
         self.optim      = Adam(total_p, lr=lr)
-        self.base_optim = Adam(base_p,  lr=lr * 2.0)  # 2× LR for base head
+        self.base_optim = Adam(base_p,  lr=lr * 2.0)
 
     def _forward_total(self, states, actions, causal_ctx):
         """Forward pass for total consequence head. Returns raw pre-softplus logits for backprop."""
@@ -211,7 +196,7 @@ class InterventionalConsequenceNet:
         raw_sigma = self.sigma_head.forward(h)
         C     = softplus(raw_C).squeeze(-1)
         sigma = softplus(raw_sigma).squeeze(-1) + 1e-4
-        return C, sigma, h, raw_C, raw_sigma  # also return raws for chain rule
+        return C, sigma, h, raw_C, raw_sigma
 
     def _forward_base(self, states, causal_ctx):
         """Forward pass for E_a'[C | s, a', h]."""
@@ -278,18 +263,12 @@ class InterventionalConsequenceNet:
             raise ValueError("ICN weights must be finite and non-negative.")
         Wn = W / (W.sum() + 1e-8)
 
-        # BUG FIX: must save raw pre-softplus outputs to correctly apply chain rule.
-        # Previously _forward_total did not return raw logits, so d_softplus_vec(sigma)
-        # was evaluated at post-softplus sigma (wrong). Now we use raw_C and raw_sigma.
         C_total, sigma, h_total, raw_C, raw_sigma = self._forward_total(states, actions, ctx)
         C_base,  h_base, raw_B                    = self._forward_base(states, ctx)
 
-        # L_total: MSE
         err_total = C_total - tgt
         l_total   = float(np.sum(Wn * err_total**2))
 
-        # L_base: Huber loss (more robust, prevents base_head collapse)
-        # Soft clipping prevents any single transition dominating
         err_base_raw = C_base - base_tgt
         delta_clip = 0.5
         abs_err_b  = np.abs(err_base_raw)
@@ -301,38 +280,28 @@ class InterventionalConsequenceNet:
                               delta_clip * (abs_err_b - 0.5 * delta_clip))
         l_base     = float(np.sum(Wn * base_loss))
 
-        # L_sigma: Laplace NLL  = log σ + |err| / σ
         abs_err  = np.abs(C_total - tgt)
         l_sigma  = float(np.sum(
             Wn * (np.log(sigma + 1e-6) + abs_err / (sigma + 1e-6))))
 
-        # --- Backward ---
-        # Total head: chain rule through softplus — d_softplus(raw_C) = sigmoid(raw_C)
-        # L_sigma also depends on the location C_total.  Omitting this term
-        # made the implemented gradient disagree with the documented loss.
         d_location_nll = Wn * np.sign(err_total) / (sigma + 1e-6)
         d_C_total_pre = ((2.0 * Wn * err_total + d_location_nll)
                          * sigmoid(raw_C.squeeze(-1)))
         d_total_h, dW_t, db_t = self.total_head.backward(d_C_total_pre[:, None])
 
-        # Sigma head: chain rule through softplus — d_sigma is wrt pre-softplus raw_sigma
         d_sigma       = Wn * (1.0 / (sigma + 1e-6)
                               - abs_err / (sigma + 1e-6) ** 2)
-        d_sigma_pre   = d_sigma * sigmoid(raw_sigma.squeeze(-1))  # chain rule through softplus
+        d_sigma_pre   = d_sigma * sigmoid(raw_sigma.squeeze(-1))
         d_sigma_h, dW_s, db_s = self.sigma_head.backward(d_sigma_pre[:, None])
 
         d_trunk_total = d_total_h + d_sigma_h
         _, trunk_t_grads = self.total_trunk.backward(d_trunk_total)
 
-        # Base head: chain rule through softplus
         d_C_base_pre = (Wn * err_base
                         * sigmoid(raw_B.squeeze(-1)))
         d_base_h, dW_b, db_b = self.base_head.backward(d_C_base_pre[:, None])
         _, trunk_b_grads = self.base_trunk.backward(d_base_h)
 
-        # Apply gradients via explicit param lists matched to grad lists.
-        # Replaces the fragile comment-only ordering guarantee with an assert
-        # that fires immediately if anyone adds/removes a head in the future.
         total_params = self.total_trunk.all_params() + self.total_head.params() + self.sigma_head.params()
         total_grads  = trunk_t_grads + [dW_t, db_t] + [dW_s, db_s]
         base_params  = self.base_trunk.all_params() + self.base_head.params()
@@ -358,16 +327,13 @@ class InterventionalConsequenceNet:
     def _all_params(self):
         return (self.total_trunk.all_params() + self.total_head.params()
                 + self.base_trunk.all_params()  + self.base_head.params()
-                + self.sigma_head.params())  # base_optim uses same param refs
+                + self.sigma_head.params())
 
 
 def d_softplus_vec(x):
     return sigmoid(x)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Causal Replay Buffer
-# ─────────────────────────────────────────────────────────────────────────────
 
 class CausalReplayBuffer:
     """
@@ -391,14 +357,11 @@ class CausalReplayBuffer:
         self.gru_dim     = gru_dim
         self.rng         = np.random.default_rng(seed)
 
-        # Core fields
         self._states      = np.zeros((capacity, state_dim),  np.float32)
         self._actions     = np.zeros(capacity,               np.int32)
         self._rewards     = np.zeros(capacity,               np.float32)
         self._next_states = np.zeros((capacity, state_dim),  np.float32)
         self._consequences= np.zeros(capacity,               np.float32)
-        # Consequences aligned back to the action that caused them.  Delayed
-        # feedback cannot supervise the transition on which it was observed.
         self._aligned_consequences = np.zeros(capacity,       np.float32)
         self._aligned_valid = np.zeros(capacity,              np.bool_)
         self._scm_label_valid = np.zeros(capacity,            np.bool_)
@@ -408,7 +371,6 @@ class CausalReplayBuffer:
         self._td_errors   = np.ones(capacity,                np.float32)
         self._c_errors    = np.ones(capacity,                np.float32)
 
-        # Causal history: (capacity, history_len, state_dim + action_dim + 1)
         hist_dim = state_dim + action_dim + 1
         self._histories   = np.zeros((capacity, history_len, hist_dim), np.float32)
         self._history_valid = np.zeros((capacity, history_len), np.bool_)
@@ -416,11 +378,11 @@ class CausalReplayBuffer:
         self._pos    = 0
         self._size   = 0
         self.alpha_p = 0.6
-        self.beta_p  = 0.4       # annealed toward 1.0 over training
+        self.beta_p  = 0.4
         self._beta_start   = 0.4
         self._beta_end     = 1.0
-        self._beta_frames  = 100_000  # steps over which to anneal
-        self._total_pushes = 0   # counts push() calls for annealing
+        self._beta_frames  = 100_000
+        self._total_pushes = 0
 
     def push(self, state, action, reward, next_state, consequence,
              done, hidden, next_hidden, causal_history: list,
@@ -442,9 +404,6 @@ class CausalReplayBuffer:
         self._hiddens[i]     = np.asarray(hidden,      np.float32).squeeze()
         self._next_hid[i]    = np.asarray(next_hidden, np.float32).squeeze()
 
-        # A circular overwrite must not inherit the evicted transition's stale
-        # priority.  New samples enter at the current maximum so they are seen
-        # at least once before their TD/cost errors are measured.
         if self._size:
             self._td_errors[i] = max(float(self._td_errors[:self._size].max()), 1.0)
             self._c_errors[i] = max(float(self._c_errors[:self._size].max()), 1.0)
@@ -452,7 +411,6 @@ class CausalReplayBuffer:
             self._td_errors[i] = 1.0
             self._c_errors[i] = 1.0
 
-        # Encode history
         hist_dim = self.state_dim + self.action_dim + 1
         oh_all   = np.eye(self.action_dim, dtype=np.float32)
         h_arr    = np.zeros((self.history_len, hist_dim), np.float32)
@@ -470,10 +428,6 @@ class CausalReplayBuffer:
 
         self._pos  = (self._pos + 1) % self.capacity
         self._size = min(self._size + 1, self.capacity)
-        # Anneal PER importance-sampling exponent β: 0.4 → 1.0 over training.
-        # At β=1.0, IS weights fully correct the priority bias.
-        # At β=0.4 (early), correction is mild — lets high-priority transitions
-        # dominate early training for faster learning of rare catastrophic events.
         self._total_pushes += 1
         frac = min(self._total_pushes / self._beta_frames, 1.0)
         self.beta_p = self._beta_start + frac * (self._beta_end - self._beta_start)
@@ -484,8 +438,6 @@ class CausalReplayBuffer:
         index = int(index)
         if not 0 <= index < self.capacity:
             raise IndexError("replay index outside buffer capacity")
-        # A bounded action log can outlive an entry after circular overwrite.
-        # The caller only uses recent entries, but guard against stale indices.
         if index >= self._size and self._size < self.capacity:
             return False
         self._aligned_consequences[index] = float(consequence)
@@ -506,17 +458,13 @@ class CausalReplayBuffer:
         pri   = self._priorities()
         probs = pri / pri.sum()
         if batch_size == self._size:
-            # Every transition is included with probability one, so importance
-            # weights should not depend on priority.
             idxs = self.rng.permutation(self._size)
             W = np.ones(batch_size, np.float32)
         else:
-            # With-replacement PER matches the standard IS correction below.
             idxs = self.rng.choice(self._size, batch_size, replace=True, p=probs)
             W = (self._size * probs[idxs]) ** (-self.beta_p)
             W /= W.max()
 
-        # Decode histories back to list-of-tuples for encoder
         decoded_hists = []
         for i in idxs:
             hist = []

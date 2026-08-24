@@ -2,7 +2,7 @@ import numpy as np
 try:
     from .networks import ActorNetwork, CriticNetwork
     from .normalizer import StateNormalizer
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import ActorNetwork, CriticNetwork
     from normalizer import StateNormalizer
 
@@ -38,14 +38,9 @@ class A2CAgent:
         return self.actor.sample(s)
 
     def store(self, state, action, reward, next_state, consequence, done):
-        # Preserve the exact normalised observations used under the behaviour
-        # policy; recomputing them after running-stat updates changes the data.
         s_norm  = self.normalizer.normalize(state)
         self.normalizer.update(state)
         ns_norm = self.normalizer.normalize(next_state)
-        # FIX: keep rollout bounded — only retain 2*n_steps to prevent stale
-        # cross-episode data accumulating. run_episode_baseline also clears
-        # _rollout per episode, so this is a belt-and-suspenders guard.
         if len(self._rollout) >= self.n_steps * 2:
             self._rollout = self._rollout[-self.n_steps:]
         self._rollout.append(
@@ -76,7 +71,6 @@ class A2CAgent:
         values     = self.critic.value(S)
         advantages = np.clip(returns - values, -5.0, 5.0)
 
-        # Full backprop for actor and critic
         self.actor.backward_update(
             S, A, advantages, W, entropy_coeff=self.entropy_coeff)
         v_errors = np.clip(returns - self.critic.value(S), -5.0, 5.0)

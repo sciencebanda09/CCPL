@@ -8,7 +8,6 @@ Changes from Technical Report:
 """
 import numpy as np
 
-# ── Activations ───────────────────────────────────────────────────────────────
 
 def relu(x):     return np.maximum(0.0, x)
 def sigmoid(x):  return 1.0 / (1.0 + np.exp(-np.clip(x, -20, 20)))
@@ -20,9 +19,6 @@ def softmax(x):
     if not np.all(np.isfinite(x)):
         raise FloatingPointError("softmax received a non-finite logit")
     shifted = x - x.max(axis=-1, keepdims=True)
-    # Max subtraction already prevents overflow.  Clipping the negative tail
-    # assigns artificial probability mass and makes the usual softmax
-    # derivative inconsistent with the forward pass.
     e = np.exp(shifted)
     return e / e.sum(axis=-1, keepdims=True)
 
@@ -32,7 +28,6 @@ def d_tanh(t):     return 1.0 - t**2
 def d_softplus(x): return sigmoid(x)
 
 
-# ── Primitives ────────────────────────────────────────────────────────────────
 
 class Linear:
     def __init__(self, in_dim, out_dim, rng, scale=None):
@@ -50,8 +45,6 @@ class Linear:
         if self._last_x is None:
             raise RuntimeError("Linear.backward() called before forward().")
         d_out = np.asarray(d_out, np.float32)
-        # Flatten every leading dimension.  Using ``x.T`` is only correct for
-        # 2-D arrays and produced invalid gradients for sequence-shaped input.
         x_2d = self._last_x.reshape(-1, self._last_x.shape[-1])
         d_2d = d_out.reshape(-1, d_out.shape[-1])
         dW = x_2d.T @ d_2d
@@ -88,9 +81,6 @@ class LayerNorm:
         dg     = (d_out * x_hat).sum(axis=reduce_axes)
         db_g   = d_out.sum(axis=reduce_axes)
         dx_hat = d_out * self.g
-        # LayerNorm normalises over the feature axis, so the denominator and
-        # leading coefficient are D, not the batch size.  The old formula was
-        # only accidentally correct when batch_size == feature_dim.
         dx     = (inv_std / D) * (
             D * dx_hat
             - dx_hat.sum(-1, keepdims=True)
@@ -154,7 +144,6 @@ class MLP:
         return x
 
 
-# ── GRU Cell with full backprop ────────────────────────────────────────────────
 
 class GRUCell:
     def __init__(self, input_dim, hidden_dim, rng):
@@ -204,11 +193,10 @@ class GRUCell:
         return np.zeros((batch, self.Wr.shape[1]), np.float32)
 
 
-# ── Adam ──────────────────────────────────────────────────────────────────────
 
 class Adam:
     def __init__(self, params, lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8,
-                 clip=3.0):   # FIX-5: tightened from 5.0 to 3.0
+                 clip=3.0):
         self.params = list(params)
         self.lr, self.beta1, self.beta2, self.eps, self.clip = lr, beta1, beta2, eps, clip
         self.m = [np.zeros_like(p) for p in self.params]
@@ -244,7 +232,6 @@ class Adam:
             self.v.append(np.zeros_like(p))
 
 
-# ── GRU Policy Network ─────────────────────────────────────────────────────────
 
 class GRUPolicyNet:
     def __init__(self, state_dim, action_dim, gru_dim=64, hidden_dim=128,
@@ -290,7 +277,6 @@ class GRUPolicyNet:
             d_q[i, ac] = -delta[i]
         d_q -= d_q.mean(axis=-1, keepdims=True)
 
-        # td_errors = target - prediction, hence dL/dV is negative.
         d_feat_v, dWv, dbv = self.val_head.backward(-delta[:, None])
         d_feat_a, dWa, dba = self.adv_head.backward(d_q)
         d_feat = d_feat_v + d_feat_a
@@ -314,7 +300,6 @@ class GRUPolicyNet:
                 self.val_head.params() + self.adv_head.params())
 
 
-# ── Multi-Horizon Consequence Network ─────────────────────────────────────────
 
 class MultiHorizonConsequenceNet:
     def __init__(self, state_dim, action_dim, hidden_dim=128, n_layers=2,
@@ -446,7 +431,6 @@ class MultiHorizonConsequenceNet:
             trunk_grads_list.append(trunk_grads)
             head_grads_list.append(head_grads)
 
-        # Chain rule through positive scalar coefficients and softmax blend.
         raw_scales = (self.log_alpha, self.log_beta, self.log_gamma)
         scalar_grads = [
             np.array([scale_grads[i] * float(sigmoid(raw)[0])], np.float32)
@@ -462,14 +446,11 @@ class MultiHorizonConsequenceNet:
         return c_loss
 
 
-# ── State-Dependent Lambda Network ────────────────────────────────────────────
 
 class LambdaNet:
     def __init__(self, state_dim=6, hidden_dim=32, lambda_max=3.0, lr=5e-4, seed=0):
         rng = np.random.default_rng(seed)
         self.lambda_max = lambda_max
-        # FIX-L1: was [0, 1, 4] — missed system_pressure (3) and hidden_penalty (5),
-        # the two features most predictive of impending collapse.  Use ALL features.
         self.input_idx  = list(range(state_dim))
         self.net   = MLP([len(self.input_idx), hidden_dim, hidden_dim, 1], rng, scale=0.05)
         self.optim = Adam(self.net.all_params(), lr=lr)
@@ -492,12 +473,9 @@ class LambdaNet:
         raw = self.net.forward(x)
         sig = sigmoid(raw).squeeze(-1)
         errors = np.asarray(lam_errors, np.float32)
-        # d(lambda/lambda_max)/d(raw) = sigmoid'(raw).  The previous
-        # implementation multiplied by lambda_max and omitted batch averaging.
         d_raw = (errors * sig * (1 - sig) / max(len(errors), 1))[:, None]
         _, grads = self.net.backward(d_raw)
 
-        # FIX-4: apply L2 weight decay to all parameter gradients
         if weight_decay > 0.0:
             params = self.net.all_params()
             grads  = [g + weight_decay * p
@@ -508,7 +486,6 @@ class LambdaNet:
     def params(self): return self.net.all_params()
 
 
-# ── Actor / Critic for baselines ──────────────────────────────────────────────
 
 class ActorNetwork:
     def __init__(self, state_dim, action_dim, hidden_dim=128, n_layers=2, lr=3e-4, seed=0):
@@ -533,7 +510,6 @@ class ActorNetwork:
         B     = len(actions)
         probs = self.probs(states)
         delta = -(advantages * weights / B).astype(np.float32)
-        # FIX: clip delta to prevent inf/nan gradients from extreme advantages
         delta = np.clip(delta, -5.0, 5.0)
         d_logits = np.zeros_like(probs)
         for i, a in enumerate(actions):
@@ -543,7 +519,6 @@ class ActorNetwork:
             log_p = np.log(probs + 1e-8)
             expected_log = (probs * log_p).sum(axis=-1, keepdims=True)
             d_logits += (entropy_coeff / B) * probs * (log_p - expected_log)
-        # FIX: skip backward if gradient contains inf/nan
         if not np.all(np.isfinite(d_logits)):
             return
         _, grads = self.net.backward(d_logits)
@@ -594,7 +569,6 @@ class ActorNetwork:
         weights = np.asarray(weights, np.float32)
         probs = self.probs(states)
         log_probs = np.log(probs + 1e-8)
-        # L = E_a[alpha log pi(a|s) - Q_r(s,a) + lambda Q_c(s,a)].
         score_grad = (alpha * (log_probs + 1.0)
                       - np.asarray(q_values, np.float32)
                       + float(lagrange) * np.asarray(cost_values, np.float32))
@@ -619,7 +593,6 @@ class CriticNetwork:
         B     = len(v_errors)
         self.net.forward(np.asarray(states, np.float32))
         delta = np.clip(v_errors * weights / B, -5.0, 5.0).astype(np.float32)
-        # v_errors = target - prediction, so gradient descent needs -error.
         _, grads = self.net.backward(-delta[:, None])
         self.optim.step(grads)
 
@@ -648,16 +621,11 @@ class QNetwork:
         self.val_head.forward(h)
         self.adv_head.forward(h)
 
-        # Dueling gradient: Q(s,a) = V(s) + A(s,a) - mean_a A(s,a)
-        # dL/dQ(s,a) = -delta for the selected action, 0 elsewhere
         d_q = np.zeros((B, self.action_dim), np.float32)
         for i, ac in enumerate(actions):
             d_q[i, ac] = -delta[i]
-        # Subtract mean to match the forward centering: A' = A - mean(A)
         d_q -= d_q.mean(axis=-1, keepdims=True)
 
-        # Value head: grad is mean of d_q over actions (because V adds to all)
-        # -delta broadcast across all actions averages to -delta
         d_h_v, dWv, dbv = self.val_head.backward(-delta[:, None])
         d_h_a, dWa, dba = self.adv_head.backward(d_q)
         _, trunk_grads  = self.trunk.backward(d_h_v + d_h_a)
@@ -671,7 +639,6 @@ class QNetwork:
         return self.trunk.all_params() + self.val_head.params() + self.adv_head.params()
 
 
-# ── Vectorised GRU batch forward ──────────────────────────────────────────────
 
 def gru_batch_forward(cell: GRUCell, X: np.ndarray, H: np.ndarray) -> np.ndarray:
     X = np.asarray(X, np.float32); H = np.asarray(H, np.float32)

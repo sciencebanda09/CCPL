@@ -5,7 +5,7 @@ try:
     from .networks import QNetwork
     from .replay_buffer import ReplayBuffer
     from .normalizer import StateNormalizer
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import QNetwork
     from replay_buffer import ReplayBuffer
     from normalizer import StateNormalizer
@@ -75,7 +75,6 @@ class DQNAgent:
         td_error = td_target - q_cur
         self.last_loss = float(np.mean(W * td_error**2))
 
-        # Full backprop
         self.online.backward_update(S, A, td_error, W)
         self.buffer.update_priorities(batch["indices"], np.abs(td_error))
 

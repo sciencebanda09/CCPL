@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "ccpl"))
 sys.path.insert(0, str(ROOT / "ccpl" / "algorithms"))
 sys.path.insert(0, str(ROOT / "ccpl" / "environments"))
-import adversarial_envs  # noqa: F401  (registers additional environments)
+import adversarial_envs
 
 from ccpl_agent   import make_ccpl, run_episode, build_ccpl_ablation, make_ccpl_base
 from ppo_agent    import PPOAgent

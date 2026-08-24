@@ -4,15 +4,12 @@ try:
     from .networks import ActorNetwork, CriticNetwork, QNetwork, softmax, sigmoid, Adam
     from .normalizer import StateNormalizer
     from .replay_buffer import ReplayBuffer
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import ActorNetwork, CriticNetwork, QNetwork, softmax, sigmoid, Adam
     from normalizer import StateNormalizer
     from replay_buffer import ReplayBuffer
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Shared Lagrangian multiplier update helper
-# ─────────────────────────────────────────────────────────────────────────────
 
 class LagrangianMultiplier:
     """
@@ -34,8 +31,6 @@ class LagrangianMultiplier:
 
     def update(self, mean_cost: float, threshold: float):
         """Gradient ascent: increase λ when cost > threshold."""
-        # Optimisation is over log(lambda), so d[lambda*(cost-d)]/d log(lambda)
-        # includes the chain-rule factor lambda.
         grad = np.array([
             -self.value * (mean_cost - threshold)], np.float32)
         self._optim.step([grad])
@@ -45,9 +40,6 @@ class LagrangianMultiplier:
     def __float__(self): return self.value
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 1.  CPOAgent  —  first-order constrained-policy approximation
-# ─────────────────────────────────────────────────────────────────────────────
 
 class CPOAgent:
     """
@@ -76,9 +68,9 @@ class CPOAgent:
         self.action_dim  = action_dim
         self.gamma       = gamma
         self.gae_lambda  = gae_lambda
-        self.cost_limit  = cost_limit   # discounted episodic constraint budget
+        self.cost_limit  = cost_limit
         self.n_steps     = n_steps
-        self.delta_kl    = delta_kl     # KL trust-region radius
+        self.delta_kl    = delta_kl
         self.steps_done  = 0
         self.update_count = 0
         self.rng         = np.random.default_rng(seed)
@@ -136,13 +128,11 @@ class CPOAgent:
         R   = np.array(rewards,  np.float32)
         C   = np.array(costs,    np.float32)
         D   = np.array(dones,    np.float32)
-        # GAE for reward advantage
         vals  = self.critic.value(S)
         nvals = self.critic.value(NS)
         adv_r = self._gae(R, vals, nvals, D)
         ret_r = adv_r + vals
 
-        # GAE for cost advantage
         cvals  = self.cost_critic.value(S)
         cnvals = self.cost_critic.value(NS)
         adv_c  = self._gae(C, cvals, cnvals, D)
@@ -150,15 +140,10 @@ class CPOAgent:
 
         adv_r = (adv_r - adv_r.mean()) / (adv_r.std() + 1e-8)
 
-        # Estimate constraint violation
         mean_cost = float(self._last_episode_cost)
         self.last_cost_return = mean_cost
         constraint_violated = mean_cost > self.cost_limit
 
-        # First-order constrained trust-region approximation. This is not the
-        # conjugate-gradient implementation from Achiam et al.; the explicit
-        # label prevents the old code's unused delta_kl from masquerading as
-        # exact CPO.
         W_r = np.ones(T, np.float32)
         policy_adv = adv_r.copy()
         if constraint_violated:
@@ -181,7 +166,6 @@ class CPOAgent:
             for p, old_p in zip(params, old_params):
                 p[:] = old_p + trust_scale * (p - old_p)
 
-        # Critic updates
         v_errs  = np.clip(ret_r - self.critic.value(S), -5.0, 5.0)
         cv_errs = np.clip(ret_c - self.cost_critic.value(S), -5.0, 5.0)
         self.critic.backward_update(S, v_errs, W_r)
@@ -212,9 +196,6 @@ class CPOAgent:
         }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2.  RCPOAgent  —  Reward-Constrained Policy Optimisation
-# ─────────────────────────────────────────────────────────────────────────────
 
 class RCPOAgent:
     """
@@ -307,7 +288,6 @@ class RCPOAgent:
         OLP = np.array(old_lps,  np.float32)
         lam = self.lagrangian.value
 
-        # Lagrangian-penalised reward
         R_aug = R - lam * C
 
         vals  = self.critic.value(S)
@@ -321,7 +301,6 @@ class RCPOAgent:
         returns = adv + vals
         adv     = (adv - adv.mean()) / (adv.std() + 1e-8)
 
-        # Cost critic
         cvals  = self.cost_critic.value(S)
         cnvals = self.cost_critic.value(NS)
         c_adv  = np.zeros(T, np.float32)
@@ -332,7 +311,6 @@ class RCPOAgent:
             c_adv[t] = gae_c
         c_returns = c_adv + cvals
 
-        # PPO epochs
         p_losses = []
         for _ in range(self.n_epochs):
             idxs = self.rng.permutation(T)
@@ -353,7 +331,6 @@ class RCPOAgent:
                 v_errs = np.clip(ret_mb - self.critic.value(s_mb), -5.0, 5.0)
                 self.critic.backward_update(s_mb, v_errs, W_mb)
 
-        # Cost critic update
         W_full = np.ones(T, np.float32)
         cv_errs = np.clip(c_returns - self.cost_critic.value(S), -5.0, 5.0)
         self.cost_critic.backward_update(S, cv_errs, W_full)
@@ -374,9 +351,6 @@ class RCPOAgent:
         }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3.  PIDLagrangianAgent  —  PID controller on the dual variable
-# ─────────────────────────────────────────────────────────────────────────────
 
 class PIDLagrangianAgent:
     """
@@ -409,7 +383,6 @@ class PIDLagrangianAgent:
         self.update_count    = 0
         self.rng             = np.random.default_rng(seed)
 
-        # PID state
         self.kp, self.ki, self.kd = pid_kp, pid_ki, pid_kd
         self.lambda_max  = lambda_max
         self._lambda     = 1.0
@@ -532,9 +505,6 @@ class PIDLagrangianAgent:
         }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4.  SACLagrangianAgent  —  Soft Actor-Critic with Lagrangian
-# ─────────────────────────────────────────────────────────────────────────────
 
 class SACLagrangianAgent:
     """
@@ -567,7 +537,6 @@ class SACLagrangianAgent:
         self.update_count = 0
         self.rng         = np.random.default_rng(seed)
 
-        # Twin Q-networks for reward
         self.q1        = QNetwork(state_dim, action_dim, hidden_dim, n_layers, lr, seed)
         self.q2        = QNetwork(state_dim, action_dim, hidden_dim, n_layers, lr, seed+1)
         self.q1_target = QNetwork(state_dim, action_dim, hidden_dim, n_layers, lr, seed)
@@ -575,23 +544,19 @@ class SACLagrangianAgent:
         self.q1_target.copy_weights_from(self.q1)
         self.q2_target.copy_weights_from(self.q2)
 
-        # Cost Q-network
         self.q_cost        = QNetwork(state_dim, action_dim, hidden_dim, n_layers, lr, seed+2)
         self.q_cost_target = QNetwork(state_dim, action_dim, hidden_dim, n_layers, lr, seed+2)
         self.q_cost_target.copy_weights_from(self.q_cost)
 
-        # Actor
         self.actor      = ActorNetwork(state_dim, action_dim, hidden_dim,
                                        n_layers, lr, seed)
         self.normalizer = StateNormalizer(state_dim)
         self.buffer     = ReplayBuffer(buffer_capacity, seed=seed)
 
-        # Entropy temperature α (learnable)
         self.target_entropy = -target_entropy_ratio * np.log(1.0 / action_dim)
         self._log_alpha = np.array([0.0], np.float32)
         self._alpha_optim = Adam([self._log_alpha], lr=lr_alpha)
 
-        # Lagrangian multiplier
         self.lagrangian = LagrangianMultiplier(init_val=1.0, lr=lr_lambda,
                                                lambda_max=lambda_max)
 
@@ -639,23 +604,19 @@ class SACLagrangianAgent:
         B  = len(A)
         lam = self.lagrangian.value
 
-        # Next action distribution for target
         next_probs = softmax(self.actor.logits(NS))
         next_log_p = np.log(next_probs + 1e-8)
 
-        # Twin Q targets for reward
         q1_ns = self.q1_target.forward(NS)
         q2_ns = self.q2_target.forward(NS)
         q_ns  = np.minimum(q1_ns, q2_ns)
         v_ns  = (next_probs * (q_ns - self.alpha * next_log_p)).sum(-1)
         td_r  = R + self.gamma * v_ns * (1 - D)
 
-        # Cost Q target
         qc_ns  = self.q_cost_target.forward(NS)
         vc_ns  = (next_probs * qc_ns).sum(-1)
         td_c   = C + self.gamma * vc_ns * (1 - D)
 
-        # Q updates
         q1_cur = self.q1.forward(S)[np.arange(B), A]
         q2_cur = self.q2.forward(S)[np.arange(B), A]
         qc_cur = self.q_cost.forward(S)[np.arange(B), A]
@@ -668,7 +629,6 @@ class SACLagrangianAgent:
         self.q2.backward_update(S, A, td_err2, W)
         self.q_cost.backward_update(S, A, td_errc, W)
 
-        # Policy update: maximise E[Q - λ·Q_c + α·H]
         probs   = softmax(self.actor.logits(S))
         log_p   = np.log(probs + 1e-8)
         q1_s    = self.q1.forward(S)
@@ -681,16 +641,12 @@ class SACLagrangianAgent:
         policy_loss = float(np.mean(np.sum(
             probs * (self.alpha * log_p - q_s + lam * qc_s), axis=-1)))
 
-        # Alpha update
         entropy = -(probs * log_p).sum(-1).mean()
-        # Minimise alpha * (H - H_target): alpha decreases when entropy is
-        # above target and increases when it is below target.
         alpha_grad = np.array([
             self.alpha * (entropy - self.target_entropy)], np.float32)
         self._alpha_optim.step([alpha_grad])
         self._log_alpha[0] = np.clip(self._log_alpha[0], -20.0, 5.0)
 
-        # Soft target updates
         self.q1_target.soft_update_from(self.q1, self.tau)
         self.q2_target.soft_update_from(self.q2, self.tau)
         self.q_cost_target.soft_update_from(self.q_cost, self.tau)

@@ -24,20 +24,16 @@ import math
 import numpy as np
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Abstract Safety Environment base
-# ─────────────────────────────────────────────────────────────────────────────
 
 class SafetyEnvBase:
     """
     Abstract base for Safety-Gym-style environments.
     Provides the standard API: reset(), step(), episode_stats().
     """
-    # Subclasses override these
     state_dim:   int = 8
-    action_dim:  int = 5            # discretized for CCPL compatibility
+    action_dim:  int = 5
     name:        str = "safety_base"
-    constraint_threshold: float = 25.0   # local configurable default
+    constraint_threshold: float = 25.0
 
     def __init__(self, max_steps: int = 200, consequence_delay: int = 1,
                  noise_std: float = 0.02, seed: int = 0):
@@ -98,9 +94,6 @@ class SafetyEnvBase:
         delayed_c    = self._get_delayed_consequence(imm_c)
         emitted_delayed_hit = delayed_c > 0
         if self._done and self._consequence_queue:
-            # Do not discard costs whose reporting delay extends past the
-            # episode boundary.  A summed terminal observation has no unique
-            # delay label, so mark delay supervision as unavailable.
             pending = self._consequence_queue
             delayed_c += float(np.sum(pending))
             self._delayed_hits += int(np.count_nonzero(np.asarray(pending) > 0))
@@ -133,9 +126,6 @@ class SafetyEnvBase:
         }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SafetyPointGoal1 — synthetic analogue of Safety-Gym PointGoal1
-# ─────────────────────────────────────────────────────────────────────────────
 
 class SafetyPointGoal1Env(SafetyEnvBase):
     """
@@ -166,13 +156,12 @@ class SafetyPointGoal1Env(SafetyEnvBase):
     name = "safety_pointgoal1"
     constraint_threshold = 25.0
 
-    # Action effects: (d_heading, d_speed, risk_multiplier)
     _ACTIONS = {
-        0: (-0.25,  0.4, 0.8),   # STEER_LEFT
-        1: ( 0.0,   0.8, 1.0),   # FORWARD
-        2: ( 0.0,   1.2, 1.8),   # FORWARD_FAST (dangerous near hazards)
-        3: ( 0.25,  0.4, 0.8),   # STEER_RIGHT
-        4: ( 0.0,  -0.3, 0.3),   # BRAKE
+        0: (-0.25,  0.4, 0.8),
+        1: ( 0.0,   0.8, 1.0),
+        2: ( 0.0,   1.2, 1.8),
+        3: ( 0.25,  0.4, 0.8),
+        4: ( 0.0,  -0.3, 0.3),
     }
 
     def __init__(self, n_hazards: int = 8, arena_size: float = 4.0,
@@ -189,16 +178,13 @@ class SafetyPointGoal1Env(SafetyEnvBase):
 
     def _init_state(self) -> np.ndarray:
         A = self.arena_size
-        # Robot starts near center with random heading
         self._robot_pos  = self.rng.uniform(-0.5, 0.5, 2).astype(np.float32)
         self._robot_vel  = np.zeros(2, np.float32)
         self._robot_head = self.rng.uniform(-math.pi, math.pi)
-        # Goal placed randomly in arena, far from start
         angle = self.rng.uniform(-math.pi, math.pi)
         dist  = self.rng.uniform(A * 0.4, A * 0.7)
         self._goal_pos   = np.array([dist * math.cos(angle),
                                       dist * math.sin(angle)], np.float32)
-        # Hazards placed randomly in arena
         self._hazard_pos = self.rng.uniform(-A * 0.8, A * 0.8,
                                              (self.n_hazards, 2)).astype(np.float32)
         return self._get_obs()
@@ -213,7 +199,6 @@ class SafetyPointGoal1Env(SafetyEnvBase):
             self._hazard_pos - self._robot_pos[None], axis=1)
         min_haz   = float(haz_dists.min()) / A
 
-        # Hazards in front 90-degree arc
         front_haz = 0
         for i, hp in enumerate(self._hazard_pos):
             d   = hp - self._robot_pos
@@ -235,34 +220,28 @@ class SafetyPointGoal1Env(SafetyEnvBase):
 
     def _transition(self, action: int):
         d_head, d_speed, risk_mult = self._ACTIONS[action]
-        # Update heading
         self._robot_head += d_head + self.rng.normal(0, self.noise_std)
-        # Compute velocity
         max_speed = 0.3
         fwd = np.array([math.cos(self._robot_head),
                          math.sin(self._robot_head)], np.float32)
         speed       = float(np.clip(d_speed * max_speed, -0.2, 0.4))
         self._robot_vel = fwd * speed + self.rng.normal(0, self.noise_std, 2).astype(np.float32)
-        # Update position
         prev_pos         = self._robot_pos.copy()
         self._robot_pos  = np.clip(self._robot_pos + self._robot_vel,
                                     -self.arena_size, self.arena_size)
 
-        # Reward: progress toward goal
         prev_dist = float(np.linalg.norm(self._goal_pos - prev_pos))
         new_dist  = float(np.linalg.norm(self._goal_pos - self._robot_pos))
         reward    = (prev_dist - new_dist) * 2.0
 
-        # Goal reached
         goal_reached = new_dist < 0.3
         if goal_reached:
             reward += 5.0
 
-        # Cost: hazard contact, scaled by the selected controller action.
         haz_dists = np.linalg.norm(
             self._hazard_pos - self._robot_pos[None], axis=1)
         in_hazard   = (haz_dists < self.hazard_radius).any()
-        consequence = float(in_hazard) * risk_mult  # risk_mult scales for FORWARD_FAST
+        consequence = float(in_hazard) * risk_mult
 
         obs  = self._get_obs()
         info = {"goal_reached": goal_reached, "in_hazard": in_hazard,
@@ -271,9 +250,6 @@ class SafetyPointGoal1Env(SafetyEnvBase):
         return obs, reward, min(consequence, 1.5), info
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SafetyCarGoal1 — synthetic analogue of Safety-Gym CarGoal1
-# ─────────────────────────────────────────────────────────────────────────────
 
 class SafetyCarGoal1Env(SafetyEnvBase):
     """
@@ -297,17 +273,17 @@ class SafetyCarGoal1Env(SafetyEnvBase):
     constraint_threshold = 25.0
 
     _ACTIONS = {
-        0: (-0.35,  0.5, 0.9),   # STEER_LEFT
-        1: ( 0.0,   0.9, 1.0),   # FORWARD
-        2: ( 0.0,   1.3, 2.0),   # FORWARD_FAST (very dangerous)
-        3: ( 0.35,  0.5, 0.9),   # STEER_RIGHT
-        4: ( 0.0,  -0.4, 0.2),   # BRAKE
+        0: (-0.35,  0.5, 0.9),
+        1: ( 0.0,   0.9, 1.0),
+        2: ( 0.0,   1.3, 2.0),
+        3: ( 0.35,  0.5, 0.9),
+        4: ( 0.0,  -0.4, 0.2),
     }
 
     def __init__(self, n_hazards: int = 12, arena_size: float = 5.0,
                  hazard_radius: float = 0.5, **kw):
         kw.pop("consequence_delay", None)
-        super().__init__(consequence_delay=3, **kw)  # 3-step delay for car damage
+        super().__init__(consequence_delay=3, **kw)
         self.n_hazards     = n_hazards
         self.arena_size    = arena_size
         self.hazard_radius = hazard_radius
@@ -374,13 +350,11 @@ class SafetyCarGoal1Env(SafetyEnvBase):
     def _transition(self, action: int):
         d_head, d_speed, risk_mult = self._ACTIONS[action]
 
-        # Car dynamics: steering affects heading via turning radius
         self._steer_angle = float(np.clip(self._steer_angle * 0.7 + d_head, -0.5, 0.5))
         self._robot_head += self._steer_angle
         speed_prev        = float(np.linalg.norm(self._robot_vel))
         self._accel       = float(np.clip(d_speed - speed_prev, -0.5, 0.5))
 
-        # Skid: high speed + sharp turn → skid
         self._skid = float(np.clip(abs(self._steer_angle) * speed_prev * 2.0, 0, 1))
         skid_noise  = self.rng.normal(0, 0.05 + 0.1 * self._skid, 2).astype(np.float32)
 
@@ -393,7 +367,6 @@ class SafetyCarGoal1Env(SafetyEnvBase):
         self._robot_pos  = np.clip(self._robot_pos + self._robot_vel,
                                     -self.arena_size, self.arena_size)
 
-        # Reward: progress
         prev_dist = float(np.linalg.norm(self._goal_pos - prev_pos))
         new_dist  = float(np.linalg.norm(self._goal_pos - self._robot_pos))
         reward    = (prev_dist - new_dist) * 2.0
@@ -401,7 +374,6 @@ class SafetyCarGoal1Env(SafetyEnvBase):
         if goal_reached:
             reward += 5.0
 
-        # Hazard accumulation (consequence delay matches car's reaction time)
         haz_dists   = np.linalg.norm(
             self._hazard_pos - self._robot_pos[None], axis=1)
         in_hazard   = (haz_dists < self.hazard_radius).any()
@@ -418,9 +390,6 @@ class SafetyCarGoal1Env(SafetyEnvBase):
         return obs, reward, min(consequence, 2.0), info
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CCPL adapter for continuous-state Safety-Gym environments
-# ─────────────────────────────────────────────────────────────────────────────
 
 class SafetyGymCCPLAdapter:
     """
@@ -437,7 +406,6 @@ class SafetyGymCCPLAdapter:
         self.agent_kwargs = agent_kwargs
         self.seed        = seed
 
-        # Build one sample env to get dimensions
         sample = env_class(**env_kwargs, seed=0)
         self.state_dim  = sample.state_dim
         self.action_dim = sample.action_dim
@@ -450,13 +418,10 @@ class SafetyGymCCPLAdapter:
             state_dim    = self.state_dim,
             action_dim   = self.action_dim,
             seed         = self.seed,
-            # Safety Gym needs more conservative λ start (higher hazard density)
             lambda_warmup = 100,
             penalty_scale = 2.0,
             constraint_d  = self.constraint_threshold,
-            # Larger buffer for longer episodes
             buffer_capacity = 100_000,
-            # Slightly faster epsilon decay for 200-step episodes
             eps_decay    = 3000,
         )
         kwargs.update(self.agent_kwargs)
@@ -466,9 +431,6 @@ class SafetyGymCCPLAdapter:
         return self.env_class(**self.env_kwargs, seed=seed)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Registry and factory
-# ─────────────────────────────────────────────────────────────────────────────
 
 SAFETY_GYM_REGISTRY = {
     "safety_pointgoal1": SafetyPointGoal1Env,
@@ -511,7 +473,6 @@ def run_safety_benchmark(n_episodes: int = 500, n_seeds: int = 3,
             print(f"  Synthetic safety benchmark: {env_name}")
             print(f"{'='*70}")
 
-        # Sample env for dimensions
         sample_env = env_cls(seed=0)
         S = sample_env.state_dim
         A = sample_env.action_dim
@@ -569,7 +530,6 @@ def run_safety_benchmark(n_episodes: int = 500, n_seeds: int = 3,
                           f"Jc={env_results[key]['mean_cost']:.3f}, "
                           f"CSR={env_results[key]['csr']:.1f}%")
 
-        # Aggregate across seeds
         for name in ["CCPL", "CCPL-Base", "DQN", "PPO", "CPO-FO"]:
             seed_keys  = [f"{name}_seed{s}" for s in range(n_seeds)
                           if f"{name}_seed{s}" in env_results]
@@ -606,9 +566,6 @@ def run_safety_benchmark(n_episodes: int = 500, n_seeds: int = 3,
     return results
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Quick test
-# ─────────────────────────────────────────────────────────────────────────────
 
 def test_safety_envs():
     """Quick smoke test for both environments."""

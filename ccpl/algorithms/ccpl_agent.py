@@ -28,7 +28,7 @@ try:
     from .lambda_theorem import ConsequenceVarianceEstimator, AdaptiveLambdaWithDominanceTracking
     from .causal_graph import EnvironmentSCM, CausalLabelGenerator
     from .hallucination_fix import HallucinationGate
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import GRUPolicyNet, LambdaNet, gru_batch_forward, sigmoid, Adam, QNetwork
     from networks_v7 import AttentionAugmentedPolicyNet, SelfCorrectionModule
     from networks_v8 import AbstractionLayer, WorkingMemoryLambdaModifier
@@ -106,9 +106,9 @@ class CCPLAgent:
         gru_dim            = 40,
         hidden_dim         = 80,
         n_layers           = 2,
-        causal_dim         = 32,    # causal history encoding dimension
-        tau_max            = 15,    # max delay horizon
-        history_len        = 8,     # causal history window
+        causal_dim         = 32,
+        tau_max            = 15,
+        history_len        = 8,
         lr_policy          = 1.2e-3,
         lr_icn             = 4e-4,
         lr_lambda          = 3e-4,
@@ -122,11 +122,10 @@ class CCPLAgent:
         batch_size         = 64,
         buffer_capacity    = 60_000,
         lambda_max         = 2.0,
-        lambda_warmup      = 100,    # BUG-4 FIXED: Appendix C Table 5 says 100 (was 300)
-        penalty_scale      = 2.0,    # Appendix C Table 5: P_scale=2.0 (was wrong: 12.0)
-                                      # inference, not absorbed into TD targets like single-Q
+        lambda_warmup      = 100,
+        penalty_scale      = 2.0,
         constraint_d       = 3.0,
-        causal_cost_clip   = 10.0,   # fixed clip; avoids a moving Bellman objective
+        causal_cost_clip   = 10.0,
         max_action_penalty = 50.0,
         use_attention      = False,
         attn_d_model       = 32,
@@ -228,7 +227,7 @@ class CCPLAgent:
         self.q_c_target.copy_weights_from(self.q_c_net)
         self._ep_gamma_c: float  = 1.0
         self._ep_Jc_accum: float = 0.0
-        self._last_Jc: float     = constraint_d   # neutral start
+        self._last_Jc: float     = constraint_d
         self._episode_horizon: int = 100
         self._delay_prior_mean: float = 5.0
 
@@ -244,7 +243,6 @@ class CCPLAgent:
         self.bellman    = DelayCorrectedBellman(
             self.delay_dist, gamma=gamma, tau_max=tau_max)
 
-        # ── DIRECTION 3: Causal consequence attribution ────────────────────
         self.icn = InterventionalConsequenceNet(
             state_dim=state_dim, action_dim=action_dim,
             causal_dim=causal_dim, hidden_dim=hidden_dim // 2,
@@ -253,8 +251,6 @@ class CCPLAgent:
         self.scm       = EnvironmentSCM(noise_std=0.0)
         self.label_gen = CausalLabelGenerator(self.scm)
 
-        # ── Cognitive modules (from CCPL v8) ─────────────────────────────
-        # Rejected above until replay context / a transition model exists.
         self.history_attn = None
         self.planner = None
         self.corrector = (
@@ -268,29 +264,23 @@ class CCPLAgent:
             WorkingMemoryLambdaModifier(wm_window, 0.20)
             if use_working_memory else None)
 
-        # ── Causal replay buffer ──────────────────────────────────────────
         self.buffer = CausalReplayBuffer(
             capacity=buffer_capacity, history_len=history_len,
             state_dim=state_dim, action_dim=action_dim,
             gru_dim=gru_dim, seed=seed)
 
-        # ── Infrastructure ────────────────────────────────────────────────
         self.normalizer = StateNormalizer(state_dim)
         self._h         = self.policy_net.zero_state(1)
         self._hit_freq_ema   = 0.5
         self._hit_freq_alpha = 0.05
 
-        # Per-episode causal history (for ICN)
         self._causal_history: list = []
-        # Delay tracker: records (step, action) when consequences fire
-        # Used to build observed τ for delay net training
-        self._action_log: list = []   # (step, action, h, replay_index) tuples
-        self._obs_tau_buffer: list = []  # (h, observed_tau) pairs
+        self._action_log: list = []
+        self._obs_tau_buffer: list = []
         self._step_counter: int = 0
         self._ep_states:      list = []
         self._ep_consequences: list = []
 
-        # Diagnostics
         self.last_policy_loss     = 0.0
         self.last_icn_loss        = 0.0
         self.last_delay_loss      = 0.0
@@ -302,21 +292,17 @@ class CCPLAgent:
         self.last_gamma_eff       = float(gamma)
         self.last_icn_calib       = {}
 
-        # Conservative gate for large learned error scales and OOD states.
         self.hallucination_gate = HallucinationGate(
             delta_clip=self.causal_cost_clip)
 
-        # Theory log
         self._lambda_log: list = []
         self._gamma_eff_log: list = []
         self._delta_C_log: list = []
         self._LOG_MAX = 10_000
 
-        # Pretrain ICN on SCM ground truth
         if pretrain_steps > 0 and self.has_scm_labels:
             self._pretrain_icn(pretrain_steps, noise_std)
 
-    # ── Pretraining ────────────────────────────────────────────────────────
 
     def _pretrain_icn(self, n_steps: int, noise_std: float = 0.05):
         """
@@ -341,8 +327,7 @@ class CCPLAgent:
         rng   = self._pretrain_rng
         icn   = self.icn
         half  = n_steps // 2
-        B_pt  = 256   # larger batch for more stable gradients
-        # LR scheduler: warm up for 100 steps, then cosine decay
+        B_pt  = 256
         base_lr_init  = icn.base_optim.lr
         total_lr_init = icn.optim.lr
 
@@ -357,10 +342,9 @@ class CCPLAgent:
             n_uniform = B * 3 // 4
             n_corner  = B - n_uniform
             uniform_s = rng.uniform(0.1, 0.9, (n_uniform, self.state_dim)).astype(np.float32)
-            # High-risk corners: rl→high, fr→high, hpl→high
             corner_s  = rng.uniform(0.5, 0.95, (n_corner, self.state_dim)).astype(np.float32)
-            corner_s[:, 2] = rng.uniform(0.1, 0.9, n_corner).astype(np.float32)  # ap random
-            corner_s[:, 4] = rng.uniform(0.0, 0.3, n_corner).astype(np.float32)  # unc low
+            corner_s[:, 2] = rng.uniform(0.1, 0.9, n_corner).astype(np.float32)
+            corner_s[:, 4] = rng.uniform(0.0, 0.3, n_corner).astype(np.float32)
             states = np.concatenate([uniform_s, corner_s], axis=0)
             if noise_std > 0.0:
                 states = np.clip(
@@ -368,7 +352,6 @@ class CCPLAgent:
             return states.astype(np.float32)
 
         for step in range(n_steps):
-            # Adaptive LR
             lr_b = _cosine_lr(step, n_steps, base_lr_init)
             lr_t = _cosine_lr(step, n_steps, total_lr_init)
             icn.base_optim.lr  = lr_b
@@ -380,14 +363,11 @@ class CCPLAgent:
             ctx     = np.zeros((B_pt, icn.causal_dim), np.float32)
             W       = np.ones(B_pt, np.float32) / B_pt
 
-            tgt_base  = labels["baseline"].astype(np.float32)           # E_a[c(s,a)]
+            tgt_base  = labels["baseline"].astype(np.float32)
             tgt_total = (labels["delta_C_scm"] + labels["baseline"]).astype(np.float32)
 
-            # ── Phase 1 (first half): base_head warms up; total_head with small weight ──
-            # ── Phase 2 (second half): both heads at full strength ──────────────────────
             phase2_weight = 1.0 if step >= half else max(0.1, float(step) / half)
 
-            # Update base_head on baseline (both phases, full weight)
             C_base, h_base, raw_B = icn._forward_base(states, ctx)
             err_b     = (C_base - tgt_base) * W
             d_b_pre   = 2.0 * err_b * _sig(raw_B.squeeze(-1))
@@ -395,7 +375,6 @@ class CCPLAgent:
             _, trunk_b_grads = icn.base_trunk.backward(d_bh)
             icn.base_optim.step(trunk_b_grads + [dWb, dbb])
 
-            # Update total_head on per-action consequence (both phases, scaled)
             C_total, sigma, h_total, raw_C, raw_sigma = icn._forward_total(states, actions, ctx)
             raw_err_t = C_total - tgt_total
             err_t = raw_err_t * W * phase2_weight
@@ -412,13 +391,11 @@ class CCPLAgent:
             _, trunk_t_grads = icn.total_trunk.backward(d_trunk_total)
             icn.optim.step(trunk_t_grads + [dWt, dbt] + [dWs, dbs])
 
-        # Restore original LRs
         icn.base_optim.lr = base_lr_init
         icn.optim.lr      = total_lr_init
 
-        # Verify calibration; log result
         verify_states  = rng.uniform(0.1, 0.9, (500, self.state_dim)).astype(np.float32)
-        verify_actions = np.full(500, 2, dtype=np.int32)  # FULL action
+        verify_actions = np.full(500, 2, dtype=np.int32)
         verify_ctx     = np.zeros((500, icn.causal_dim), np.float32)
         delta_C, _, _, _ = icn.forward(verify_states, verify_actions, verify_ctx)
         v_labels         = self.label_gen.generate_batch(verify_states, verify_actions, self.action_dim)
@@ -430,8 +407,6 @@ class CCPLAgent:
             self._pretrain_corr = corr
             self._pretrain_mae  = mae
             self._pretrain_full_pos = full_pos_frac
-        # Verify FULL action has positive ΔC (critical for Table 4 T3)
-        # If not achieved, run extra 500 FULL-focused steps
         if not hasattr(self, '_pretrain_corr') or self._pretrain_corr < 0.75:
             for _ in range(500):
                 states_f  = _sample_diverse_states(rng, B_pt)
@@ -454,21 +429,15 @@ class CCPLAgent:
                 d_sfh, dWsf, dbsf = icn.sigma_head.backward(d_sigf[:, None])
                 _, tg_f = icn.total_trunk.backward(d_fh + d_sfh)
                 icn.optim.step(tg_f + [dWf, dbf] + [dWsf, dbsf])
-            # Re-verify after extra phase to update diagnostics correctly
             delta_C2, _, _, _ = icn.forward(verify_states, verify_actions, verify_ctx)
             if np.std(delta_C2) > 1e-6 and np.std(scm_delta) > 1e-6:
                 self._pretrain_corr = float(np.corrcoef(delta_C2, scm_delta)[0, 1])
                 self._pretrain_mae  = float(np.mean(np.abs(delta_C2 - scm_delta)))
                 self._pretrain_full_pos = float((delta_C2 > 0).mean())
 
-    # ── Properties ────────────────────────────────────────────────────────
 
     @property
     def lambda_scale(self) -> float:
-        # Cosine warmup: smooth 0.2→1.0 over lambda_warmup episodes.
-        # Floor of 0.2 ensures penalty is never fully off — even at episode 0
-        # the agent receives 20% of the full constraint penalty, preventing the
-        # replay buffer from filling entirely with high-consequence transitions.
         t = min(self.episodes_done / max(self.lambda_warmup, 1), 1.0)
         return float(0.2 + 0.8 * 0.5 * (1.0 - np.cos(np.pi * t)))
 
@@ -480,7 +449,6 @@ class CCPLAgent:
         return self.eps_end + (self.eps_start - self.eps_end) * math.exp(
             -self.steps_done / max(decay, 1))
 
-    # ── Episode lifecycle ──────────────────────────────────────────────────
 
     def reset_hidden(self, max_steps: int = None, expected_delay: float = None):
         self._h = self.policy_net.zero_state(1)
@@ -514,8 +482,6 @@ class CCPLAgent:
                                   np.float32)
             cons_arr = np.asarray(episode_consequences, np.float32)
             self.policy_net.memory.write(s_norm, cons_arr)
-            # The target critic must retrieve from the same non-parametric
-            # memory. Previously its memory stayed empty forever.
             if hasattr(self.target_net, "memory"):
                 self.target_net.memory.copy_contents_from(self.policy_net.memory)
 
@@ -532,7 +498,6 @@ class CCPLAgent:
             self.working_mem.push(c)
         self.icn.encoder.push(state, int(action), c)
 
-    # ── Action selection ───────────────────────────────────────────────────
 
     def select_action(self, state: np.ndarray, eval_mode: bool = False) -> int:
         if not eval_mode:
@@ -540,7 +505,6 @@ class CCPLAgent:
 
         s_norm = self.normalizer.normalize(state)
 
-        # Effective lambda (D2: abstraction + working memory)
         base_lam = float(self.lambda_net.forward(s_norm)) * self.lambda_scale
         if self.abstraction is not None:
             base_lam *= self.abstraction.lambda_amplification(state)
@@ -566,13 +530,11 @@ class CCPLAgent:
             self._h = h_new
             return int(self.rng.integers(self.action_dim))
 
-        # D3: Causal attribution for action selection
         causal_ctx = self.icn.encoder.context()
         acts       = np.arange(self.action_dim, dtype=np.int32)
         icn_state = np.asarray(state, np.float32) if self.has_scm_labels else s_norm
         delta_C, sigma = self.icn.predict_delta(icn_state, acts, causal_ctx)
 
-        # D1: Adaptive discount (used for planning horizon scaling)
         h_flat   = h_new.squeeze(0) if h_new.ndim > 1 else h_new
         gamma_e  = float(self.bellman.gamma_eff(h_flat[None]).item())
 
@@ -580,10 +542,8 @@ class CCPLAgent:
                      if (cognitive_active and self.corrector is not None) else 1.0)
         lam_eff   = base_lam * corr_mult
 
-        # Planning (scale by γ_eff for delay-aware horizon)
         plan_pen = np.zeros(self.action_dim, np.float32)
         if cognitive_active and self.planner is not None:
-            # Planning uses the ICN but needs a causal ctx; use current context
             _plan_ctx = causal_ctx[None] if causal_ctx.ndim == 1 else causal_ctx
             raw_plan  = self._plan_rollout(icn_state, self.action_dim, _plan_ctx)
             if raw_plan.std() > 1e-6:
@@ -591,31 +551,15 @@ class CCPLAgent:
                 p_range = float(raw_plan.max() - raw_plan.min()) + 1e-6
                 plan_pen = (raw_plan * gamma_e).astype(np.float32) * (q_range / p_range)
 
-        # ── Dual-Q action scoring with HallucinationGate ─────────────────
-        # Penalty has two components:
-        #   1. ICN delta_C: immediate causal attribution (D3) — absolute magnitude
-        #   2. Q_c advantage: future consequence ranking — which actions lead to
-        #      MORE future constraint cost relative to the safest action
-        #
-        # We use Q_c ADVANTAGE (q_c - min(q_c)) not raw Q_c values.
-        # This is robust to the Q_c value drifting negative (a known issue with
-        # dueling nets and non-negative cost functions): the advantage is always
-        # >= 0 regardless of the absolute Q_c level, and correctly identifies
-        # which actions are relatively MORE dangerous.
         h_for_qc   = h_flat[None]
-        q_c_vals   = self.q_c_net.forward(h_for_qc).squeeze(0)   # (A,)
-        q_c_adv    = q_c_vals - q_c_vals.min()                    # relative ≥ 0
-        # Bootstrap from the supervised immediate contrast, then hand over to
-        # the learned delay-aware cost critic. The old formula made Q_c's term
-        # proportional to max(ICN penalty), so Q_c had *zero* effect whenever
-        # ICN predicted zero and double-counted the same cost otherwise.
+        q_c_vals   = self.q_c_net.forward(h_for_qc).squeeze(0)
+        q_c_adv    = q_c_vals - q_c_vals.min()
         critic_mix = float(np.clip(self.update_count / 1_000.0, 0.0, 1.0))
         icn_scale = (lam_eff * self.penalty_scale * gamma_e
                      * (1.0 - critic_mix))
         icn_pen = icn_scale * np.maximum(delta_C, 0.0)
         future_pen = (lam_eff * self.penalty_scale * critic_mix
                       * np.maximum(q_c_adv, 0.0))
-        # Gate applies only to the ICN-derived term; Q_c has its own TD error.
         if not eval_mode:
             self.hallucination_gate.observe_state(s_norm)
         gated_icn = self.hallucination_gate.gate_penalty(
@@ -637,15 +581,12 @@ class CCPLAgent:
         if len(lst) > self._LOG_MAX:
             lst.pop(0)
 
-    # ── Store ──────────────────────────────────────────────────────────────
 
     def store(self, state, action, reward, next_state, consequence,
               done, hidden=None, next_hidden=None, info=None):
         self.normalizer.update(state)
         c = float(consequence)
 
-        # Accumulate discounted J_c = Σ γ^t c_t for proper Lagrangian update.
-        # _last_Jc is used in the lambda update as the true dual gradient signal.
         self._ep_Jc_accum += self._ep_gamma_c * float(consequence)
         self._ep_gamma_c  *= self.gamma
         if done:
@@ -668,24 +609,17 @@ class CCPLAgent:
             state, action, reward, next_state, c, done, h, nh,
             list(self._causal_history), scm_label_valid=scm_label_valid)
 
-        # Append to per-episode history
         self._causal_history.append((state.copy(), int(action), c))
         if len(self._causal_history) > self.history_len:
             self._causal_history.pop(0)
         self._ep_states.append(state.copy())
         self._ep_consequences.append(c)
 
-        # Track action-step pairs for delay observation using h_t, the GRU
-        # state after the current observation has been encoded. This is the
-        # same representation used by action selection for gamma_eff(h_t).
         h_vec = np.asarray(nh, np.float32).squeeze()
         self._action_log.append(
             (self._step_counter, int(action), h_vec.copy(), replay_index))
         self._step_counter += 1
 
-        # When c > 0, record the observed tau for delay net supervision.
-        # Use actual_tau from info dict (ground truth from env) when available.
-        # Fall back to heuristic midpoint only when env doesn't expose actual_tau.
         delay_label_valid = (
             not isinstance(info, dict)
             or info.get("delay_supervision_valid", True))
@@ -696,7 +630,6 @@ class CCPLAgent:
                 if actual_tau < 0 or actual_tau >= len(self._action_log):
                     actual_tau = None
             if actual_tau is not None:
-                # Ground truth: use the action taken exactly actual_tau steps ago
                 past_idx = len(self._action_log) - 1 - actual_tau
                 obs_tau  = int(np.clip(actual_tau, 0, self.tau_max))
                 _, _, past_h, past_replay_index = self._action_log[past_idx]
@@ -706,11 +639,9 @@ class CCPLAgent:
                     0.95 * self._delay_prior_mean + 0.05 * float(obs_tau))
                 if len(self._obs_tau_buffer) > 500:
                     self._obs_tau_buffer.pop(0)
-        # Keep action log bounded
         if len(self._action_log) > self.tau_max * 2:
             self._action_log.pop(0)
 
-    # ── Update ─────────────────────────────────────────────────────────────
 
     def update(self) -> bool:
         batch = self.buffer.sample(self.batch_size)
@@ -727,16 +658,10 @@ class CCPLAgent:
         NH  = batch["next_hiddens"]
         B   = len(A)
 
-        # ── D3: Encode causal contexts ────────────────────────────────────
         causal_ctxs = self.icn.encoder.context_batch(batch["histories"])
         S_icn = (np.asarray(batch["states"], np.float32)
                  if self.has_scm_labels else S)
 
-        # ── D3: consequence-model update ─────────────────────────────────
-        # A delayed C_t cannot label (S_t, A_t).  Use an explicit SCM label
-        # only for transitions produced by the matching StandardEnv; otherwise
-        # use feedback aligned back to its known source transition.  Invalid
-        # terminal aggregates are excluded rather than silently misattributed.
         scm_mask = np.asarray(batch["scm_label_valid"], bool)
         aligned_valid = np.asarray(batch["aligned_valid"], bool)
         model_valid = scm_mask | aligned_valid
@@ -762,17 +687,13 @@ class CCPLAgent:
         delta_C = np.asarray(delta_C, np.float32)
         sigma   = np.asarray(sigma,   np.float32)
 
-        # Calibrate ICN against SCM ground truth every 50 updates
         if np.any(scm_mask) and self.update_count % 50 == 0:
             raw_states = batch["states"][scm_mask]
             self.last_icn_calib = self.label_gen.icn_calibration_error(
                 raw_states, A[scm_mask], delta_C[scm_mask])
-            # Feed reference-model MAE to the recalibration scheduler.
             if self.last_icn_calib:
                 self.hallucination_gate.observe_icn_mae(self.last_icn_calib.get("mae", 0.0))
 
-        # Every 100 updates: recalibrate ICN on SCM labels for all actions
-        # This prevents sign drift on under-explored actions (DEFER, REBALANCE)
         if (np.any(scm_mask) and self.update_count % 100 == 0
                 and self.update_count > 0):
             raw_states_32 = batch["states"][scm_mask][:32]
@@ -782,9 +703,6 @@ class CCPLAgent:
             ctx_cal     = np.zeros((len(all_acts), self.icn.causal_dim), np.float32)
             scm_labels  = self.label_gen.generate_batch(raw_repeated, all_acts, self.action_dim)
             scm_targets = scm_labels["delta_C_scm"] + scm_labels["baseline"]
-            # A constant sample-weight multiplier would cancel because
-            # update_step normalises weights.  Vary the number of supervised
-            # refinement steps instead, so poor calibration has real effect.
             calibration_strength = self.hallucination_gate.recalib_weight()
             calibration_steps = 1 + int(round(4.0 * calibration_strength))
             W_cal = np.ones(len(all_acts), np.float32)
@@ -793,12 +711,9 @@ class CCPLAgent:
                     raw_repeated, all_acts, scm_targets, ctx_cal, W_cal,
                     baseline_targets=scm_labels["baseline"])
 
-        # ── D2: Lambda values ─────────────────────────────────────────────
         lam_raw   = self.lambda_net.forward(S)
         lam_batch = lam_raw * self.lambda_scale
 
-        # Current recurrent state h_t. Replay stores H as the pre-observation
-        # state h_{t-1}; the delay distribution is trained and queried on h_t.
         H_cur = gru_batch_forward(self.policy_net.gru, S, H)
         if self.use_attention and hasattr(self.policy_net, 'memory'):
             H_cur_in = self.policy_net.res_norm.forward(
@@ -806,10 +721,7 @@ class CCPLAgent:
         else:
             H_cur_in = H_cur
 
-        # ── D1: Delay distribution update ─────────────────────────────────
-        # Use real observed τ from action-consequence log when available
         if len(self._obs_tau_buffer) >= self.batch_size // 2:
-            # Sample from real observations
             buf_idx  = self.rng.choice(
                 len(self._obs_tau_buffer),
                 min(self.batch_size, len(self._obs_tau_buffer)),
@@ -819,19 +731,12 @@ class CCPLAgent:
             buf_w    = np.ones(len(buf_idx), np.float32)
             self.last_delay_loss = self.delay_dist.update_step(buf_h, buf_tau, buf_w)
         else:
-            # Warm-start from the current environment's configured delay. The
-            # old hard-coded value 5 mislabeled shifted/randomised episodes.
             _prior_mean = self._delay_prior_mean
             obs_tau = np.full(
                 len(H_cur), int(np.clip(round(_prior_mean), 0, self.tau_max)),
                 np.int32)
             self.last_delay_loss = self.delay_dist.update_step(H_cur, obs_tau, W)
 
-        # ── D1: Delay-corrected TD targets — DUAL Q architecture ──────────
-        # Q_r (policy_net): learns E[Σγ^t r_t] — pure reward, stationary target
-        # Q_c (q_c_net):    learns E[Σγ^t c_t] — pure constraint, stationary target
-        # λ only enters at inference: Q_penalised = Q_r - λ(s)·Q_c
-        # Neither Q ever sees λ in its Bellman target → no non-stationarity.
         H_pol = gru_batch_forward(self.policy_net.gru, NS, NH)
         H_tgt = gru_batch_forward(self.target_net.gru, NS, NH)
 
@@ -843,10 +748,6 @@ class CCPLAgent:
         else:
             H_pol_in, H_tgt_in = H_pol, H_tgt
 
-        # Component critics for the current scalarised policy.  The next action
-        # must be selected from the same reward-minus-cost score used at
-        # inference; reward-only selection evaluates a different policy and
-        # makes Q_c invalid for actions actually chosen by CCPL.
         feat_pol = self.policy_net.trunk.forward(H_pol_in)
         v_r_pol  = self.policy_net.val_head.forward(feat_pol)
         a_r_pol  = self.policy_net.adv_head.forward(feat_pol)
@@ -863,17 +764,11 @@ class CCPLAgent:
         q_r_tgt  = v_r_tgt + a_r_tgt - a_r_tgt.mean(axis=-1, keepdims=True)
         next_q_r  = q_r_tgt[np.arange(B), next_acts]
 
-        # Q_c current (now correctly uses CURRENT state encoding H_cur_in)
-        # and next (Double-DQN: same next_acts as Q_r)
-        q_c_cur_all  = self.q_c_net.forward(H_cur_in)   # BUG-1 FIX: was H_pol_in
+        q_c_cur_all  = self.q_c_net.forward(H_cur_in)
         q_c_tgt_all  = self.q_c_target.forward(H_tgt_in)
         q_c_cur  = q_c_cur_all[np.arange(B), A]
         q_c_next = q_c_tgt_all[np.arange(B), next_acts]
 
-        # Delay correction applies to the eventual action-attributed cost, not
-        # to the one-step reward bootstrap.  Replacing gamma with E[gamma^tau]
-        # on Q_r changes the MDP objective and is not a correction for delayed
-        # cost observations.
         delta_C_clipped = np.clip(
             delta_C, -self.causal_cost_clip, self.causal_cost_clip)
         attributable_cost = np.clip(
@@ -882,14 +777,10 @@ class CCPLAgent:
         gamma_e_vec = self.bellman.gamma_eff(H_cur)
         self.last_gamma_eff = float(gamma_e_vec.mean())
 
-        # Q_r uses the ordinary one-step Bellman discount. Q_c discounts each
-        # action's eventual attributed cost by its learned delay, then advances
-        # one decision step with gamma.
         td_r_target = (R + self.gamma * next_q_r * not_done).astype(np.float32)
         td_c_target = (gamma_e_vec * attributable_cost
                        + self.gamma * q_c_next * not_done).astype(np.float32)
 
-        # Current Q_r (uses the H_cur_in already computed above)
         feat_s  = self.policy_net.trunk.forward(H_cur_in)
         v_r_all = self.policy_net.val_head.forward(feat_s)
         a_r_all = self.policy_net.adv_head.forward(feat_s)
@@ -900,16 +791,9 @@ class CCPLAgent:
         p_loss = float(np.mean(W * td_r_errors**2))
         self.policy_net.backward_update(S, H, A, np.clip(td_r_errors, -3, 3), W)
 
-        # Q_c update — tighter gradient clip than Q_r because Q_c has lower LR
-        # and is more sensitive to outlier targets during early bootstrap.
         td_c_errors = td_c_target - q_c_cur
         self.q_c_net.backward_update(H_cur_in, A, np.clip(td_c_errors, -3.0, 3.0), W)
 
-        # ── D2: Lambda update — proper Lagrangian + Theorem-2 + PER weights ─
-        # This is a risk-conditioned penalty fit, not a proof of a per-state
-        # Lagrange dual (the CMDP contains only one global constraint).  Its
-        # global component follows episodic discounted J_c; its local component
-        # differentiates states by the learned action-attributed cost.
         per_step_d   = self.constraint_d / max(self._episode_horizon, 1)
         jc_violation = (self._last_Jc - self.constraint_d) / (self.constraint_d + 1e-6)
         global_target = float(sigmoid(jc_violation * 2.0))
@@ -919,9 +803,6 @@ class CCPLAgent:
         lam_target = np.clip(
             0.6 * global_target + 0.3 * local_target + 0.1 * freq_target,
             0.0, 1.0)
-        # Train the raw network output. Applying warmup inside the supervised
-        # error made the network compensate by inflating its raw output, then
-        # jump when the warmup scale reached one.
         lam_errors = lam_raw / self.lambda_max - lam_target
         local_dev = np.abs(delta_C_clipped - delta_C_clipped.mean())
         risk_w = np.clip(
@@ -930,14 +811,10 @@ class CCPLAgent:
         combined_lam_w = combined_lam_w / (combined_lam_w.mean() + 1e-8)
         self.lambda_net.backward_update(S, lam_errors * combined_lam_w, weight_decay=1e-4)
 
-        # Soft target updates (Q_r and Q_c)
         self.target_net.soft_update_from(self.policy_net, tau=self.tau_soft)
         self.q_c_target.soft_update_from(self.q_c_net,    tau=self.tau_soft)
 
-        # PER update: combined Q_r + Q_c errors for priority
         combined_td = 0.6 * np.abs(td_r_errors) + 0.4 * np.abs(td_c_errors)
-        # Raw observed cost belongs to an earlier action under delay. Use the cost-critic TD
-        # residual, which is aligned with the sampled state/action.
         c_errors = np.abs(td_c_errors)
         self.buffer.update_priorities(batch["indices"], combined_td, c_errors)
 
@@ -951,7 +828,6 @@ class CCPLAgent:
         self.last_jc               = self._last_Jc
         return True
 
-    # ── Diagnostics ────────────────────────────────────────────────────────
 
     def diagnostics(self) -> dict:
         d = {
@@ -985,7 +861,6 @@ class CCPLAgent:
         return d
 
     def get_theory_logs(self) -> dict:
-        # Numerical diagnostics only; neither entry verifies a research theorem.
         h_sample = np.random.default_rng(0).normal(
             size=(32, self.gru_dim)).astype(np.float32)
         delay_check = self.bellman.verify_contraction(h_sample)
@@ -996,15 +871,11 @@ class CCPLAgent:
             "delta_C_log":   list(self._delta_C_log),
             "delay_diagnostic": delay_check,
             "lambda_diagnostic": lambda_check,
-            # Historical aliases retained for callers written before the audit.
             "theorem1":      delay_check,
             "theorem2":      lambda_check,
         }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Episode runner
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_episode(agent: CCPLAgent, env,
                 train: bool = True,
@@ -1077,9 +948,6 @@ def run_episode(agent: CCPLAgent, env,
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Factory functions
-# ─────────────────────────────────────────────────────────────────────────────
 
 def make_ccpl(state_dim: int, action_dim: int, seed: int = 42,
               **kwargs) -> CCPLAgent:
@@ -1115,15 +983,10 @@ def make_ccpl_base(state_dim: int, action_dim: int, seed: int = 42) -> CCPLAgent
                   use_working_memory=False)
     a.name = "CCPL-Base"
 
-    # Disable D1: fixed gamma (no delay distribution)
     def _fixed_gamma(self, h):
         return np.full(len(h), self.gamma, np.float32)
     a.bellman.gamma_eff = types.MethodType(_fixed_gamma, a.bellman)
 
-    # Disable D2: set lambda to ZERO — CCPL-Base is fully unconstrained.
-    # This matches the V3 paper definition: plain GRU-DQN with no penalty.
-    # Using scalar mean(Ĉ) over-penalises FULL, preventing DeceptionBench
-    # bursts from firing and breaking the D3 demonstration in Section 4.4.
     def _zero_lambda(S):
         arr = np.asarray(S)
         if arr.ndim == 2:
@@ -1131,11 +994,10 @@ def make_ccpl_base(state_dim: int, action_dim: int, seed: int = 42) -> CCPLAgent
         return 0.0
     a.lambda_net.forward = _zero_lambda
 
-    # Disable D3: use raw consequence instead of causal delta_C
     _orig_icn_fwd = a.icn.forward
     def _raw_forward(S, A, ctx):
         delta, total, base, sigma = _orig_icn_fwd(S, A, ctx)
-        return total, total, base, sigma   # total Ĉ instead of causal ΔC
+        return total, total, base, sigma
     a.icn.forward = _raw_forward
 
     return a
@@ -1159,17 +1021,14 @@ def build_ccpl_ablation(state_dim: int, action_dim: int,
     full = make_ccpl(state_dim, action_dim, seed)
     full.name = "CCPL"
 
-    # ── CCPL-NoDelay: D1 removed — fixed γ instead of delay-corrected γ_eff ──
     no_delay = make_ccpl(state_dim, action_dim, seed)
     no_delay.name = "CCPL-NoDelay"
     def _fixed_gamma(self, h): return np.full(len(h), self.gamma, np.float32)
     no_delay.bellman.gamma_eff = types.MethodType(_fixed_gamma, no_delay.bellman)
 
-    # ── CCPL-NoStateλ: D2 removed — scalar λ_g (global), not state-conditioned ─
-    # Matches CPO/RCPO/PID-Lag update rule exactly.
     no_state_lam = make_ccpl(state_dim, action_dim, seed)
     no_state_lam.name = "CCPL-NoStateλ"
-    _scalar_lam = np.array([0.5], np.float32)   # mutable scalar
+    _scalar_lam = np.array([0.5], np.float32)
 
     def _scalar_lam_forward(S):
         arr = np.asarray(S)
@@ -1178,7 +1037,6 @@ def build_ccpl_ablation(state_dim: int, action_dim: int,
         return float(_scalar_lam[0])
 
     def _scalar_lam_backward(states, lam_errors, weight_decay=0.0):
-        # Scalar gradient: mean of all state errors
         grad = float(lam_errors.mean())
         _scalar_lam[0] = float(np.clip(_scalar_lam[0] - 3e-4 * grad,
                                         0.0, no_state_lam.lambda_max))
@@ -1186,18 +1044,14 @@ def build_ccpl_ablation(state_dim: int, action_dim: int,
     no_state_lam.lambda_net.forward = _scalar_lam_forward
     no_state_lam.lambda_net.backward_update = _scalar_lam_backward
 
-    # ── CCPL-NoCausal: D3 removed — uses raw Ĉ instead of causal ΔC ──────────
     no_causal = make_ccpl(state_dim, action_dim, seed)
     no_causal.name = "CCPL-NoCausal"
     _orig_icn_forward = no_causal.icn.forward
     def _raw_forward_nocausal(S, A, ctx):
         delta, total, base, sigma = _orig_icn_forward(S, A, ctx)
-        return total, total, base, sigma   # total Ĉ instead of causal ΔC
+        return total, total, base, sigma
     no_causal.icn.forward = _raw_forward_nocausal
 
-    # ── CCPL-SingleQ: D4 removed — single Q-function with λ in TD target ──────
-    # Matches all prior Lagrangian DQN implementations. λ appears in Bellman target,
-    # causing non-stationarity as λ updates (confirmed: 3.3pp CSR drop in paper).
     single_q = make_ccpl(state_dim, action_dim, seed)
     single_q.name = "CCPL-SingleQ"
     _orig_single_update = single_q.update
@@ -1241,7 +1095,6 @@ def build_ccpl_ablation(state_dim: int, action_dim: int,
         delta_C, _, _, sigma = self.icn.forward(S_icn, A, causal_ctxs)
         delta_C = np.asarray(delta_C, np.float32)
         lam_batch = self.lambda_net.forward(S) * self.lambda_scale
-        # D4 REMOVED: λ baked into TD target → non-stationarity
         from networks import gru_batch_forward as _gru_fwd
         H_cur = _gru_fwd(self.policy_net.gru, S, H)
         H_pol = _gru_fwd(self.policy_net.gru, NS, NH)
@@ -1265,7 +1118,6 @@ def build_ccpl_ablation(state_dim: int, action_dim: int,
         next_q_r  = q_tgt[np.arange(B), next_acts]
         _, gamma_e_vec = self.bellman.td_target(R, next_q_r, np.zeros_like(R), np.zeros_like(R), D, H_cur, 1.0)
         delta_C_c = np.clip(delta_C, 0.0, self.causal_cost_clip)
-        # Single-Q target: r - λ·c baked in (NON-STATIONARY)
         td_combined_target = (
             R - lam_batch * self.penalty_scale * gamma_e_vec * delta_C_c
             + self.gamma * next_q_r * (1.0 - D)
@@ -1279,11 +1131,8 @@ def build_ccpl_ablation(state_dim: int, action_dim: int,
         p_loss = float(np.mean(W * td_errors**2))
         self.policy_net.backward_update(S, H, A, np.clip(td_errors, -3, 3), W)
         self.target_net.soft_update_from(self.policy_net, tau=self.tau_soft)
-        # Lambda update
         per_step_d = self.constraint_d / max(self._episode_horizon, 1)
         jc_v = (self._last_Jc - self.constraint_d) / (self.constraint_d + 1e-6)
-        # The replayed C can have been emitted by an older action.  Use the
-        # current action-centred prediction for this transition's local risk.
         c_ex = delta_C_c / (per_step_d + 1e-6) - 1.0
         from networks import sigmoid as _sig
         lam_signal = 0.6 * jc_v + 0.4 * float(_sig(c_ex * 2.0).mean())
@@ -1295,8 +1144,6 @@ def build_ccpl_ablation(state_dim: int, action_dim: int,
         lam_err = raw_lam / self.lambda_max - lam_tgt
         self.lambda_net.backward_update(S, lam_err * W, weight_decay=1e-4)
         combined_td = np.abs(td_errors)
-        # There is no cost critic in this ablation.  Avoid comparing the
-        # current action prediction with a potentially delayed observation.
         c_errors = np.abs(delta_C_c)
         self.buffer.update_priorities(batch["indices"], combined_td, c_errors)
         self.update_count += 1

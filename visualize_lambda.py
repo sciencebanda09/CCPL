@@ -28,7 +28,6 @@ from ccpl_agent import CCPLAgent as CCPLAgent
 from environments import ENV_REGISTRY
 
 
-# ── Plot style (consistent with plots.py) ─────────────────────────────────────
 
 _BLUE   = "#2563EB"
 _CORAL  = "#D85A30"
@@ -52,9 +51,6 @@ def _save(fig, path):
     print(f"  Saved: {path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Logging helpers — called during training to accumulate trajectory data
-# ─────────────────────────────────────────────────────────────────────────────
 
 class LambdaTrajectoryLogger:
     """
@@ -109,9 +105,6 @@ class LambdaTrajectoryLogger:
         }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Figure 1: Lambda heatmap over state space
-# ─────────────────────────────────────────────────────────────────────────────
 
 def plot_lambda_heatmap(logger_data: dict, out_dir: str,
                         n_bins: int = 12, filename: str = "mech_01_lambda_heatmap.png"):
@@ -122,7 +115,6 @@ def plot_lambda_heatmap(logger_data: dict, out_dir: str,
     states  = logger_data["states"]
     lambdas = logger_data["lambdas"]
 
-    # State dims: 0=resource_load, 1=future_risk
     rl = np.clip(states[:, 0], 0, 1)
     fr = np.clip(states[:, 1], 0, 1)
 
@@ -154,7 +146,6 @@ def plot_lambda_heatmap(logger_data: dict, out_dir: str,
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    # Annotate: circle the high-risk corner
     circle = plt.Circle((0.85, 0.85), 0.1, color=_CORAL, fill=False,
                          linewidth=1.5, linestyle="--")
     ax.add_patch(circle)
@@ -164,9 +155,6 @@ def plot_lambda_heatmap(logger_data: dict, out_dir: str,
     _save(fig, os.path.join(out_dir, filename))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Figure 2: Lambda trajectory around delayed-consequence shocks
-# ─────────────────────────────────────────────────────────────────────────────
 
 def plot_lambda_vs_shock(logger_data: dict, out_dir: str,
                          window: int = 15,
@@ -210,7 +198,6 @@ def plot_lambda_vs_shock(logger_data: dict, out_dir: str,
     ax.legend(fontsize=9)
     ax.set_xlim(-window, window)
 
-    # Annotate pre-hit rise if it exists
     pre_mean  = mean[:window].mean()
     post_mean = mean[window + 1:].mean()
     if pre_mean < post_mean * 0.85:
@@ -222,13 +209,10 @@ def plot_lambda_vs_shock(logger_data: dict, out_dir: str,
     _save(fig, os.path.join(out_dir, filename))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Figure 3: Policy counterfactual — StateLambda vs GlobalLambda
-# ─────────────────────────────────────────────────────────────────────────────
 
 def plot_policy_counterfactual(
-    state_data:   dict,    # logger_data from CCPL-StateLambda
-    global_data:  dict,    # logger_data from CCPL-GlobalLambda
+    state_data:   dict,
+    global_data:  dict,
     out_dir:      str,
     filename:     str = "mech_03_policy_counterfactual.png",
 ):
@@ -243,11 +227,9 @@ def plot_policy_counterfactual(
     lam_state  = state_data["lambdas"]
     lam_global = global_data["lambdas"]
 
-    # Align to same length
     min_len = min(len(lam_state), len(lam_global))
     diff    = np.abs(lam_state[:min_len] - lam_global[:min_len])
 
-    # Top-k steps with largest lambda divergence
     k    = min(200, min_len)
     topk = np.argsort(diff)[-k:]
 
@@ -274,9 +256,6 @@ def plot_policy_counterfactual(
     _save(fig, os.path.join(out_dir, filename))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Figure 4: Sigma trajectory under observation noise spikes
-# ─────────────────────────────────────────────────────────────────────────────
 
 def plot_sigma_under_noise(logger_data: dict, out_dir: str,
                            smooth_k: int = 15,
@@ -321,12 +300,9 @@ def plot_sigma_under_noise(logger_data: dict, out_dir: str,
     _save(fig, os.path.join(out_dir, filename))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Figure 5: DeceptionBench — the PPO collapse figure (key result)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def plot_deception_bench_collapse(
-    all_seed_histories: dict,   # {agent_name: [hist_seed0, ...]}
+    all_seed_histories: dict,
     out_dir: str,
     smooth_k: int = 20,
     filename: str = "mech_05_deception_collapse.png",
@@ -356,7 +332,6 @@ def plot_deception_bench_collapse(
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
 
-    # Left: per-episode reward
     for name, seed_hists in all_seed_histories.items():
         min_len = min(len(h["rewards"]) for h in seed_hists)
         mat     = np.array([smooth(h["rewards"][:min_len]) for h in seed_hists])
@@ -376,7 +351,6 @@ def plot_deception_bench_collapse(
     ax1.spines["top"].set_visible(False)
     ax1.spines["right"].set_visible(False)
 
-    # Right: cumulative constraint cost (J_c)
     for name, seed_hists in all_seed_histories.items():
         min_len = min(len(h["consequences"]) for h in seed_hists)
         mat     = np.array([smooth(h["consequences"][:min_len]) for h in seed_hists])
@@ -401,9 +375,6 @@ def plot_deception_bench_collapse(
     print(f"  [KEY RESULT] DeceptionBench collapse figure saved to {filename}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Top-level entry point
-# ─────────────────────────────────────────────────────────────────────────────
 
 def generate_mechanistic_plots(
     ccpl_logger:        LambdaTrajectoryLogger,

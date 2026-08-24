@@ -25,9 +25,6 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Lambda trajectory logger
-# ─────────────────────────────────────────────────────────────────────────────
 
 class LambdaTrajectoryLogger:
     """
@@ -74,9 +71,6 @@ class LambdaTrajectoryLogger:
         self._current.clear()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Single-environment transfer evaluator
-# ─────────────────────────────────────────────────────────────────────────────
 
 def evaluate_transfer_episode(
     agent,
@@ -110,11 +104,8 @@ def evaluate_transfer_episode(
 
         ns, r, c, done, info = env.step(action)
 
-        # Log λ(s) if available
         if lam_logger is not None and hasattr(agent, "lambda_net"):
             if getattr(agent, "_lambda_log", None):
-                # select_action logs the effective, warmup-scaled value used
-                # for this decision (including enabled modifiers).
                 lam_val = float(agent._lambda_log[-1])
             else:
                 s_norm = agent.normalizer.normalize(state)
@@ -153,9 +144,6 @@ def evaluate_transfer_episode(
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TransferEvaluator
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TransferEvaluator:
     """
@@ -270,7 +258,6 @@ class TransferEvaluator:
                 print(f"  Transfer env: {env_name}")
             transfer_results[env_name] = self._evaluate_on_env(agent, env_name)
 
-        # Retention metrics
         src_r   = float(np.mean([v["mean_reward"]      for v in source_results.values()]))
         src_c   = float(np.mean([v["mean_consequence"] for v in source_results.values()]))
         xfr_r   = float(np.mean([v["mean_reward"]      for v in transfer_results.values()]))
@@ -289,7 +276,6 @@ class TransferEvaluator:
                 float(np.mean([v["stability"] for v in transfer_results.values()])), 4),
         }
 
-        # Lambda stability across transfer domains
         lambda_stability = {}
         for env_name, res in transfer_results.items():
             ls = res.get("lambda_summary", {})
@@ -341,9 +327,6 @@ class TransferEvaluator:
         print("="*80)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Multi-agent comparison across domains
-# ─────────────────────────────────────────────────────────────────────────────
 
 def compare_transfer(agents: dict, source_envs: List[str],
                      transfer_envs: List[str],

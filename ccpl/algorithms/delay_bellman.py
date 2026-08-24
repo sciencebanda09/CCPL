@@ -12,13 +12,10 @@ convergence theorem.
 import numpy as np
 try:
     from .networks import Adam, sigmoid, softmax, MLP, Linear, softplus
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import Adam, sigmoid, softmax, MLP, Linear, softplus
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Delay Distribution Network
-# ─────────────────────────────────────────────────────────────────────────────
 
 class DelayDistributionNet:
     """
@@ -55,7 +52,7 @@ class DelayDistributionNet:
         if scalar: h = h[None]
         logits = self.net.forward(h)
         self._last_logits = logits
-        return softmax(logits)   # (B, tau_max + 1)
+        return softmax(logits)
 
     def expected_tau(self, h: np.ndarray) -> float:
         """E[τ|h] = Σ_k k · P(τ=k|h)"""
@@ -83,12 +80,10 @@ class DelayDistributionNet:
         weight_norm = weights / (weights.sum() + 1e-8)
 
         probs  = self.forward(h_batch)
-        # Cross-entropy: -log P(τ_obs | h)
         tau_idx = observed_tau
         log_p   = np.log(probs[np.arange(B), tau_idx] + 1e-8)
         loss    = float(-np.sum(log_p * weight_norm))
 
-        # Backward through softmax + MLP
         d_logits = probs.copy()
         d_logits[np.arange(B), tau_idx] -= 1.0
         d_logits *= weight_norm[:, None]
@@ -100,9 +95,6 @@ class DelayDistributionNet:
     def params(self): return self.net.all_params()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Delay-Corrected Bellman Target Computer
-# ─────────────────────────────────────────────────────────────────────────────
 
 class DelayCorrectedBellman:
     """
@@ -192,7 +184,7 @@ class DelayCorrectedBellman:
         """
         probs     = self.delay_net.forward(h_sample)
         gamma_e   = (probs * self.gamma_pows[None]).sum(-1)
-        gamma_min = float(self.gamma_pows.min())   # γ^τ_max
+        gamma_min = float(self.gamma_pows.min())
         lower = float(self.gamma_pows.min())
         upper = float(self.gamma_pows.max())
         valid_distribution = bool(

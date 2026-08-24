@@ -25,7 +25,7 @@ try:
         Linear, LayerNorm, MLP, GRUCell, GRUPolicyNet, Adam,
         gru_batch_forward,
     )
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from networks import (
     relu, sigmoid, tanh, softmax, d_relu, d_sigmoid, d_tanh,
     Linear, LayerNorm, MLP, GRUCell, GRUPolicyNet, Adam,
@@ -33,7 +33,6 @@ except ImportError:  # Legacy checkout imports.
 )
 
 
-# ── Sinusoidal Positional Encoding (Vaswani et al. §3.5) ─────────────────────
 
 def sinusoidal_pe(seq_len: int, d_model: int) -> np.ndarray:
     """
@@ -50,7 +49,6 @@ def sinusoidal_pe(seq_len: int, d_model: int) -> np.ndarray:
     return pe
 
 
-# ── Scaled Dot-Product Attention (Vaswani et al. §3.2.1) ─────────────────────
 
 class ScaledDotProductAttention:
     """
@@ -69,7 +67,6 @@ class ScaledDotProductAttention:
         self._cache = None
 
     def forward(self, Q, K, V, mask=None):
-        # Explicitly cast to float32 — numpy matmul upcasts inputs to float64
         Q = np.asarray(Q, np.float32)
         K = np.asarray(K, np.float32)
         V = np.asarray(V, np.float32)
@@ -90,21 +87,17 @@ class ScaledDotProductAttention:
     def backward(self, d_out):
         """Returns dQ, dK, dV."""
         Q, K, V, attn, d_k, mask = self._cache
-        # dV = attn^T @ d_out
-        dV      = attn.swapaxes(-2, -1) @ d_out              # (...,Sk,dv)
-        # d_attn = d_out @ V^T
-        d_attn  = d_out @ V.swapaxes(-2, -1)                  # (...,Sq,Sk)
-        # Softmax backward: d_scores = attn ⊙ (d_attn − <d_attn, attn>)
+        dV      = attn.swapaxes(-2, -1) @ d_out
+        d_attn  = d_out @ V.swapaxes(-2, -1)
         d_scores = attn * (d_attn - (d_attn * attn).sum(-1, keepdims=True))
         if mask is not None:
             d_scores = np.where(mask, 0.0, d_scores)
         d_scores = d_scores / np.sqrt(d_k + 1e-8)
-        dQ = d_scores @ K                                      # (...,Sq,dk)
-        dK = d_scores.swapaxes(-2, -1) @ Q                    # (...,Sk,dk)
+        dQ = d_scores @ K
+        dK = d_scores.swapaxes(-2, -1) @ Q
         return dQ, dK, dV
 
 
-# ── Multi-Head Attention (Vaswani et al. §3.2.2) ─────────────────────────────
 
 class MultiHeadAttention:
     """
@@ -132,7 +125,6 @@ class MultiHeadAttention:
         self._cache  = None
         self.optim   = Adam(self.params(), lr=lr)
 
-    # ── Forward ───────────────────────────────────────────────────────────
 
     def forward(self, Q_in, K_in, V_in):
         """
@@ -141,40 +133,35 @@ class MultiHeadAttention:
         V_in : same shape as K_in
         Returns out (B, Sq, d_model), attn_weights (B, h, Sq, Sk)
         """
-        # Normalise to 3-D
         q_squeezed = Q_in.ndim == 2
         if Q_in.ndim == 2: Q_in = Q_in[:, None, :]
-        if K_in.ndim == 2: K_in = K_in[None, :, :]   # (1, M, D) — broadcast
+        if K_in.ndim == 2: K_in = K_in[None, :, :]
         if V_in.ndim == 2: V_in = V_in[None, :, :]
 
         B, Sq, _ = Q_in.shape
         _, Sk, _ = K_in.shape
 
-        # Broadcast K/V to batch size if needed
         if K_in.shape[0] == 1 and B > 1:
             K_in = np.broadcast_to(K_in, (B, Sk, self.d_model)).copy()
             V_in = np.broadcast_to(V_in, (B, Sk, self.d_model)).copy()
 
-        Q = (Q_in @ self.W_Q).astype(np.float32)   # (B, Sq, D)
-        K = (K_in @ self.W_K).astype(np.float32)   # (B, Sk, D)
-        V = (V_in @ self.W_V).astype(np.float32)   # (B, Sk, D)
+        Q = (Q_in @ self.W_Q).astype(np.float32)
+        K = (K_in @ self.W_K).astype(np.float32)
+        V = (V_in @ self.W_V).astype(np.float32)
 
-        # Split heads → (B, h, S, d_k)
         Q = Q.reshape(B, Sq, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
         K = K.reshape(B, Sk, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
         V = V.reshape(B, Sk, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
 
-        attn_out, attn_w = self._sdpa.forward(Q, K, V)    # (B,h,Sq,dk)
-        # Merge heads → (B, Sq, D)
+        attn_out, attn_w = self._sdpa.forward(Q, K, V)
         attn_out = attn_out.transpose(0, 2, 1, 3).reshape(B, Sq, self.d_model)
         out      = attn_out @ self.W_O
 
         self._cache = (Q_in, K_in, V_in, attn_out, q_squeezed, B, Sq, Sk)
         if q_squeezed:
-            return out.squeeze(1), attn_w          # (B, D), (B,h,1,Sk)
+            return out.squeeze(1), attn_w
         return out, attn_w
 
-    # ── Backward ──────────────────────────────────────────────────────────
 
     def backward(self, d_out):
         """
@@ -186,14 +173,12 @@ class MultiHeadAttention:
         if q_squeezed and d_out.ndim == 2:
             d_out = d_out[:, None, :]
 
-        # Backward through W_O
         dW_O     = attn_out.reshape(B * Sq, self.d_model).T @ d_out.reshape(B * Sq, self.d_model)
-        d_attn_o = d_out @ self.W_O.T                       # (B, Sq, D)
+        d_attn_o = d_out @ self.W_O.T
 
-        # Restore head split
         d_attn_o = d_attn_o.reshape(B, Sq, self.n_heads, self.d_k).transpose(0, 2, 1, 3)
 
-        dQ_h, dK_h, dV_h = self._sdpa.backward(d_attn_o)   # (B,h,S,dk) each
+        dQ_h, dK_h, dV_h = self._sdpa.backward(d_attn_o)
 
         dQ = dQ_h.transpose(0, 2, 1, 3).reshape(B, Sq, self.d_model)
         dK = dK_h.transpose(0, 2, 1, 3).reshape(B, Sk, self.d_model)
@@ -203,7 +188,7 @@ class MultiHeadAttention:
         dW_K   = K_in.reshape(B * Sk, self.d_model).T @ dK.reshape(B * Sk, self.d_model)
         dW_V   = V_in.reshape(B * Sk, self.d_model).T @ dV.reshape(B * Sk, self.d_model)
 
-        dQ_in  = dQ @ self.W_Q.T    # (B, Sq, D)
+        dQ_in  = dQ @ self.W_Q.T
         dK_in  = dK @ self.W_K.T
         dV_in  = dV @ self.W_V.T
 
@@ -220,7 +205,6 @@ class MultiHeadAttention:
         return [self.W_Q, self.W_K, self.W_V, self.W_O]
 
 
-# ── Episodic Memory Module ────────────────────────────────────────────────────
 
 class EpisodicMemory:
     """
@@ -252,23 +236,17 @@ class EpisodicMemory:
         self.threshold  = insertion_threshold
         rng             = np.random.default_rng(seed)
 
-        # Project state → d_model for memory keys
         self.key_proj   = Linear(state_dim, d_model, rng, scale=0.05)
-        # Project GRU hidden → d_model for query
         self.query_proj = Linear(gru_dim,   d_model, rng, scale=0.05)
-        # Multi-head attention (cross-attention)
         self.mha        = MultiHeadAttention(d_model, n_heads, rng, lr=lr)
-        # Output projection → gru_dim for residual addition
         self.out_proj   = Linear(d_model,   gru_dim, rng, scale=0.01)
 
-        # Memory banks (float32 arrays)
         self._keys    = np.zeros((capacity, d_model),  np.float32)
         self._values  = np.zeros((capacity, d_model),  np.float32)
-        self._cons    = np.zeros(capacity,              np.float32)  # stored danger
+        self._cons    = np.zeros(capacity,              np.float32)
         self._filled  = 0
         self._ptr     = 0
 
-        # Optim for key_proj, query_proj, out_proj
         all_p = (self.key_proj.params() + self.query_proj.params()
                  + self.out_proj.params())
         self.proj_optim = Adam(all_p, lr=lr)
@@ -276,7 +254,6 @@ class EpisodicMemory:
         self._last_query = None
         self._last_read_active = False
 
-    # ── Write ─────────────────────────────────────────────────────────────
 
     def write(self, states: np.ndarray, consequences: np.ndarray):
         """
@@ -292,15 +269,13 @@ class EpisodicMemory:
             c = float(consequences[b])
             if c < self.threshold:
                 continue
-            # Project state to memory key
-            k = self.key_proj.forward(states[b:b+1]).squeeze(0)     # (d_model,)
-            v = k.copy()  # value = same projection for self-retrieval
+            k = self.key_proj.forward(states[b:b+1]).squeeze(0)
+            v = k.copy()
 
             if self._filled < self.capacity:
                 idx = self._filled
                 self._filled += 1
             else:
-                # Replace the least dangerous slot
                 idx = int(np.argmin(self._cons[:self._filled]))
 
             if c > self._cons[idx] or self._filled < self.capacity:
@@ -309,12 +284,7 @@ class EpisodicMemory:
                 self._cons[idx]   = c
                 self._ptr = (self._ptr + 1) % self.capacity
 
-    # ── Read ──────────────────────────────────────────────────────────────
 
-    # Maximum number of memory slots used per read.
-    # Caps memory allocation: B=64 batch × MAX_READ_M=64 slots × d_model=32 × 4 heads
-    # = 64×64×32×4 floats = 524k floats = ~2 MiB, safe on low-RAM machines.
-    # Full capacity (256) is still stored; only the top-MAX_READ_M by danger are read.
     MAX_READ_M = 64
 
     def read(self, gru_hidden: np.ndarray) -> np.ndarray:
@@ -328,22 +298,20 @@ class EpisodicMemory:
             self._last_read_active = False
             return np.zeros((B, self.out_proj.W.shape[1]), np.float32)
 
-        # Project GRU hidden to query space
-        Q  = self.query_proj.forward(np.asarray(gru_hidden, np.float32))  # (B, d_model)
+        Q  = self.query_proj.forward(np.asarray(gru_hidden, np.float32))
 
-        # Cap keys/values to MAX_READ_M most-dangerous slots to bound memory use.
         M = self._filled
         if M > self.MAX_READ_M:
             top_idx = np.argpartition(self._cons[:M], -self.MAX_READ_M)[-self.MAX_READ_M:]
-            K = self._keys[top_idx].astype(np.float32)    # (MAX_READ_M, d_model)
+            K = self._keys[top_idx].astype(np.float32)
             V = self._values[top_idx].astype(np.float32)
         else:
-            K = self._keys[:M].astype(np.float32)          # (M, d_model)
+            K = self._keys[:M].astype(np.float32)
             V = self._values[:M].astype(np.float32)
 
-        ctx, _attn = self.mha.forward(Q, K, V)             # (B, d_model)
+        ctx, _attn = self.mha.forward(Q, K, V)
         self._last_query = Q
-        out = self.out_proj.forward(ctx)                    # (B, gru_dim)
+        out = self.out_proj.forward(ctx)
         self._last_read_active = True
         return out
 
@@ -383,7 +351,6 @@ class EpisodicMemory:
         self._ptr = other._ptr
 
 
-# ── Attention-Augmented Policy Network ───────────────────────────────────────
 
 class AttentionAugmentedPolicyNet:
     """
@@ -407,41 +374,33 @@ class AttentionAugmentedPolicyNet:
         self.gru_dim    = gru_dim
         self.action_dim = action_dim
 
-        # Core GRU (unchanged from v5)
         self.gru = GRUCell(state_dim, gru_dim, rng)
 
-        # Episodic memory + cross-attention
         self.memory = EpisodicMemory(
             state_dim=state_dim, gru_dim=gru_dim, d_model=d_model,
             capacity=memory_capacity, n_heads=n_heads,
             lr=lr_attn, seed=seed)
 
-        # Residual LayerNorm before trunk
         self.res_norm = LayerNorm(gru_dim)
 
-        # Trunk + heads (same as GRUPolicyNet)
         trunk_dims    = [gru_dim] + [hidden_dim] * n_layers
         self.trunk    = MLP(trunk_dims, rng)
         self.val_head = Linear(hidden_dim, 1,          rng, scale=0.01)
         self.adv_head = Linear(hidden_dim, action_dim, rng, scale=0.01)
 
-        # Single Adam over GRU + trunk + heads (attention has its own optim)
         core_params = (self.gru.params() + [self.res_norm.g, self.res_norm.b]
                        + self.trunk.all_params()
                        + self.val_head.params() + self.adv_head.params())
         self.optim  = Adam(core_params, lr=lr_policy)
 
-    # ── Forward ───────────────────────────────────────────────────────────
 
     def forward(self, state, h):
         state = np.asarray(state, np.float32)
         if state.ndim == 1: state = state[None]
         h_new = self.gru.forward(state, h)
 
-        # Episodic memory context (cross-attention)
-        ctx  = self.memory.read(h_new)                     # (B, gru_dim)
+        ctx  = self.memory.read(h_new)
 
-        # Residual connection + LayerNorm
         feat = self.res_norm.forward(h_new + ctx)
 
         feat = self.trunk.forward(feat)
@@ -450,14 +409,12 @@ class AttentionAugmentedPolicyNet:
         q    = v + a - a.mean(axis=-1, keepdims=True)
         return q, h_new
 
-    # ── Backward ──────────────────────────────────────────────────────────
 
     def backward_update(self, states, h, actions, td_errors, weights):
         B      = len(actions)
         states = np.asarray(states, np.float32)
         h      = np.asarray(h, np.float32)
 
-        # Re-run forward for gradient computation
         h_new = self.gru.forward(states, h)
         ctx   = self.memory.read(h_new)
         normed = self.res_norm.forward(h_new + ctx)
@@ -471,16 +428,13 @@ class AttentionAugmentedPolicyNet:
             d_q[i, ac] = -delta[i]
         d_q -= d_q.mean(axis=-1, keepdims=True)
 
-        # td_errors = target - prediction, hence dL/dV is negative.
         d_feat_v, dWv, dbv = self.val_head.backward(-delta[:, None])
         d_feat_a, dWa, dba = self.adv_head.backward(d_q)
         d_feat             = d_feat_v + d_feat_a
 
         d_normed, trunk_grads = self.trunk.backward(d_feat)
 
-        # Backward through residual LayerNorm
         d_res, dg_n, db_n = self.res_norm.backward(d_normed)
-        # d_res flows through both branches of h_new + memory(h_new).
         d_h_new = d_res + self.memory.backward(d_res)
 
         _, _, gru_grads = self.gru.backward(d_h_new)
@@ -489,7 +443,6 @@ class AttentionAugmentedPolicyNet:
                       + trunk_grads + [dWv, dbv, dWa, dba])
         self.optim.step(core_grads)
 
-    # ── Utility ───────────────────────────────────────────────────────────
 
     def zero_state(self, batch=1): return self.gru.zero_state(batch)
 
@@ -507,7 +460,6 @@ class AttentionAugmentedPolicyNet:
                 + self.val_head.params() + self.adv_head.params())
 
 
-# ── Planning Module ───────────────────────────────────────────────────────────
 
 class PlanningModule:
     """
@@ -520,7 +472,6 @@ class PlanningModule:
     Usage:
       planner = PlanningModule(consequence_net, gamma=0.99, K=3)
       C_future = planner.rollout(state, action, lambda_val)
-      # Returns additional penalty for taking action from state
     """
 
     def __init__(self, consequence_net, gamma: float = 0.99, K: int = 3):
@@ -541,27 +492,22 @@ class PlanningModule:
             return np.zeros(action_dim, np.float32)
 
         s0     = np.asarray(state, np.float32)
-        # Start a separate rollout trajectory for each action
-        # States: (action_dim, state_dim)
         states = np.tile(s0[None], (action_dim, 1))
         acts   = np.arange(action_dim, dtype=np.int32)
         totals = np.zeros(action_dim, np.float32)
         gk     = 1.0
 
         for k in range(self.K):
-            # FIX: single batched forward call for all action_dim states
             C_k, _, _, _ = self.cnet.forward(states, acts)
             totals += gk * C_k
             gk     *= self.gamma
 
-            # Transition each state forward
             new_states = np.zeros_like(states)
             for i in range(action_dim):
                 new_states[i] = np.clip(
                     states[i] + self._action_delta(int(acts[i]), states[i]), 0.0, 1.0)
             states = new_states
 
-            # Greedy next-action: fully batched (A^2 states in one call)
             all_acts_tile = np.tile(np.arange(action_dim, dtype=np.int32), action_dim)
             states_tile   = np.repeat(states, action_dim, axis=0)
             C_flat, _, _, _ = self.cnet.forward(states_tile, all_acts_tile)
@@ -589,10 +535,9 @@ class PlanningModule:
         elif action == 2: delta[0] += 0.25; delta[1] -= 0.10; delta[5] += 0.05
         elif action == 3: delta[0] += 0.12; delta[1] -= 0.20
         else:             delta[0] -= 0.10; delta[3] -= 0.15
-        return delta * 0.1    # scale down for stability
+        return delta * 0.1
 
 
-# ── Self-Correction Module ────────────────────────────────────────────────────
 
 class SelfCorrectionModule:
     """
@@ -617,13 +562,13 @@ class SelfCorrectionModule:
         self.trigger_ratio     = trigger_ratio
         self.reset_ratio       = reset_ratio
         self.correction_factor = correction_factor
-        self.warmup_steps      = warmup_steps   # FIX: require this many non-zero steps
+        self.warmup_steps      = warmup_steps
 
         self._fast_ema    = 0.0
         self._slow_ema    = 0.0
         self._active      = False
         self._n_samples   = 0
-        self._nonzero_n   = 0   # FIX: count only non-zero steps for warmup
+        self._nonzero_n   = 0
 
     def update(self, consequence: float):
         """
@@ -636,7 +581,7 @@ class SelfCorrectionModule:
         """
         c = float(consequence)
 
-        if c > 0.0:                      # FIX: only update EMA on real consequences
+        if c > 0.0:
             if self._n_samples == 0:
                 self._fast_ema = self._slow_ema = c
             else:
@@ -646,11 +591,9 @@ class SelfCorrectionModule:
 
         self._n_samples += 1
 
-        # FIX: do not trigger until warmup_steps non-zero samples seen
         if self._nonzero_n < self.warmup_steps:
             return
 
-        # State machine
         if not self._active:
             if self._fast_ema > self._slow_ema * self.trigger_ratio:
                 self._active = True
@@ -679,7 +622,6 @@ class SelfCorrectionModule:
         self._n_samples = 0
 
 
-# ── Attention over State History (Self-Attention Context) ────────────────────
 
 class StateHistoryAttention:
     """
@@ -700,20 +642,16 @@ class StateHistoryAttention:
         self.history_len = history_len
         rng = np.random.default_rng(seed)
 
-        # Project raw state to d_model
         self.input_proj  = Linear(state_dim, d_model, rng, scale=0.05)
         self.mha         = MultiHeadAttention(d_model, n_heads, rng, lr=lr)
         self.norm1       = LayerNorm(d_model)
 
-        # FFN (Vaswani §3.3)
         self.ffn_1 = Linear(d_model, d_model * 4, rng, scale=0.05)
         self.ffn_2 = Linear(d_model * 4, d_model, rng, scale=0.05)
         self.norm2 = LayerNorm(d_model)
 
-        # Output projection back to state_dim for residual addition
         self.out_proj = Linear(d_model, state_dim, rng, scale=0.01)
 
-        # Rolling history buffer (online use only)
         self._history = np.zeros((history_len, state_dim), np.float32)
         self._ptr     = 0
         self._count   = 0
@@ -732,28 +670,23 @@ class StateHistoryAttention:
         if self._count == 0:
             return np.zeros(self.state_dim, np.float32)
 
-        # Build ordered sequence (oldest → newest)
         n   = min(self._count, self.history_len)
         idx = [(self._ptr - n + i) % self.history_len for i in range(n)]
-        seq = self._history[idx]                       # (n, state_dim)
+        seq = self._history[idx]
 
-        # Add sinusoidal positional encoding
         pe  = sinusoidal_pe(n, self.d_model)[:n]
-        x   = self.input_proj.forward(seq) + pe        # (n, d_model)
-        x   = x[None]                                  # (1, n, d_model)
+        x   = self.input_proj.forward(seq) + pe
+        x   = x[None]
 
-        # Self-attention block
-        attn_out, _ = self.mha.forward(x, x, x)        # (1, n, d_model)
-        x2          = self.norm1.forward(x + attn_out)  # residual + norm
+        attn_out, _ = self.mha.forward(x, x, x)
+        x2          = self.norm1.forward(x + attn_out)
 
-        # FFN block
         ffn_out = relu(self.ffn_1.forward(x2))
         ffn_out = self.ffn_2.forward(ffn_out)
         x3      = self.norm2.forward(x2 + ffn_out)
 
-        # Pool: take representation of the LAST (most recent) token
-        last    = x3[0, -1]                            # (d_model,)
-        return self.out_proj.forward(last[None]).squeeze(0)  # (state_dim,)
+        last    = x3[0, -1]
+        return self.out_proj.forward(last[None]).squeeze(0)
 
     def reset(self):
         self._history[:] = 0

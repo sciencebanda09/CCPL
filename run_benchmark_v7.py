@@ -49,7 +49,6 @@ EVAL_ENVS  = ("standard", "noisy", "shifted")
 ADV_ENVS   = ("deception_bench", "hidden_state_shift", "conflict_zone")
 
 
-# ── Agent factories ───────────────────────────────────────────────────────────
 
 def _make_all_agents(seed: int) -> dict:
     sh = dict(state_dim=STATE_DIM, action_dim=ACTION_DIM)
@@ -66,7 +65,6 @@ def _make_all_agents(seed: int) -> dict:
     }
 
 
-# ── Training helpers ──────────────────────────────────────────────────────────
 
 def _train(agent, n_eps, seed, envs=TRAIN_ENVS, verbose=False,
            max_steps=100, delay=5):
@@ -108,7 +106,6 @@ def _agg(results, envs):
     return agg
 
 
-# ── Theory verification ───────────────────────────────────────────────────────
 
 def verify_theory(agent) -> dict:
     """Run numerical and synthetic-SCM calibration diagnostics."""
@@ -117,7 +114,6 @@ def verify_theory(agent) -> dict:
     t1     = agent.bellman.verify_contraction(h_samp)
     t2     = agent.lam_tracker.theorem2_status(agent.last_mean_lambda)
 
-    # T3: ICN calibration
     from causal_graph import EnvironmentSCM, CausalLabelGenerator
     scm  = EnvironmentSCM(noise_std=0.0)
     lgen = CausalLabelGenerator(scm)
@@ -132,7 +128,6 @@ def verify_theory(agent) -> dict:
     corr  = float(np.corrcoef(dc, scm_d)[0, 1]) if dc.std() > 1e-6 else 0.0
     mae   = float(np.mean(np.abs(dc - scm_d)))
 
-    # Lambda boundedness/trend (the latter is not a convergence proof).
     lam_hist = np.array(agent._lambda_log[-500:]) if agent._lambda_log else np.array([0.5])
     lam_in_range = bool(0.0 <= lam_hist.mean() <= agent.lambda_max)
     lam_std_dec  = float(lam_hist[-100:].std()) < float(lam_hist[:100].std()) + 0.1 \
@@ -153,7 +148,6 @@ def verify_theory(agent) -> dict:
     }
 
 
-# ── Safety Gymnasium benchmark ────────────────────────────────────────────────
 
 def run_safety_gym_benchmark(n_eps, seed, verbose, max_steps=200):
     """CCPL vs baselines on repository-local synthetic safety analogues."""
@@ -217,7 +211,6 @@ def run_safety_gym_benchmark(n_eps, seed, verbose, max_steps=200):
                 print(f"    {name:<14} R={r['mean_reward']:+.3f} "
                       f"Jc={r['mean_cost']:.3f} CSR={r['csr']:.1f}%")
 
-    # Print table
     print("\n" + "="*70)
     print("  SYNTHETIC SAFETY RESULTS (held-out episodes; one trained seed)")
     print("="*70)
@@ -234,7 +227,6 @@ def run_safety_gym_benchmark(n_eps, seed, verbose, max_steps=200):
     return sg_results
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="CCPL V7 Benchmark")
@@ -254,7 +246,6 @@ def main(argv=None):
     t0  = time.time()
     all_results = {}
 
-    # ── E1: Main comparison ────────────────────────────────────────────────
     print("\n" + "="*70)
     print("  E1: Main Comparison (Table 1 equivalent)")
     print("="*70)
@@ -273,7 +264,6 @@ def main(argv=None):
             _train(agent, args.episodes, s, verbose=args.verbose,
                    max_steps=args.max_steps, delay=args.delay)
 
-        # Evaluate
         res = _eval_all(
             agents, EVAL_ENVS, args.eval_eps, s,
             max_steps=args.max_steps, delay=args.delay)
@@ -283,12 +273,10 @@ def main(argv=None):
                     all_seed_results[env][name] = []
                 all_seed_results[env][name].append(res[name].get(env, {}))
 
-        # Theory checks on CCPL
         if "CCPL" in agents:
             theory_checks[f"seed_{s}"] = verify_theory(agents["CCPL"])
         trained_agents = agents
 
-    # Aggregate across seeds
     agg_results = {}
     agent_names = list(trained_agents.keys()) if trained_agents else []
     for name in agent_names:
@@ -304,7 +292,6 @@ def main(argv=None):
             "CSR":    round(float(np.mean(csrs)), 1)  if csrs else 0.0,
         }
 
-    # Print Table 1
     print("\n" + "="*70)
     print("  TABLE 1: Main benchmark results")
     print(f"  (mean over {args.seeds} seeds x {len(EVAL_ENVS)} environments)")
@@ -324,7 +311,6 @@ def main(argv=None):
     all_results["E1_seeds"] = [args.seed + i * 100 for i in range(args.seeds)]
     save_eval_results(all_results, "E1_main", args.out)
 
-    # ── E5: numerical diagnostics ──────────────────────────────────────────
     print("\n" + "="*70)
     print("  E5/T: Numerical and Synthetic-SCM Diagnostics")
     print("="*70)
@@ -343,7 +329,6 @@ def main(argv=None):
               f"{'PASS' if tc['T4_lam_in_range'] else 'FAIL'}")
         all_results["E5_theory"] = theory_checks
 
-    # ── E2: Ablation study ─────────────────────────────────────────────────
     if args.ablation:
         print("\n" + "="*70)
         print("  E2: Ablation Study (Table 2)")
@@ -378,7 +363,6 @@ def main(argv=None):
         all_results["E2_ablation"] = abl_agg
         save_eval_results(all_results, "E2_ablation", args.out)
 
-    # ── E7: Safety Gymnasium ───────────────────────────────────────────────
     if args.safety:
         sg_r = run_safety_gym_benchmark(
             n_eps=min(args.episodes, 300), seed=args.seed,
@@ -386,7 +370,6 @@ def main(argv=None):
         all_results["E7_safety_gym"] = sg_r
         save_eval_results(all_results, "E7_safety_gym", args.out)
 
-    # ── Save final results ─────────────────────────────────────────────────
     total_time = time.time() - t0
     all_results["meta"] = {
         "total_time_s": round(total_time, 1),

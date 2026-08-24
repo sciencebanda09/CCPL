@@ -42,7 +42,6 @@ def _save(fig, path):
 
 
 def _find_ccpl_key(history: dict) -> str | None:
-    # Prefer exact match first for reproducibility
     if "CCPL" in history:
         return "CCPL"
     matches = [k for k in history if k.startswith("CCPL")]
@@ -51,7 +50,6 @@ def _find_ccpl_key(history: dict) -> str | None:
     return None
 
 
-# ── 01: Confidence interval reward curves ─────────────────────────────────────
 
 def plot_ci_reward_curves(all_seed_histories, out):
     """all_seed_histories: {agent_name: [hist_seed0, hist_seed1, ...]}"""
@@ -70,7 +68,6 @@ def plot_ci_reward_curves(all_seed_histories, out):
     ax.legend(fontsize=9); _save(fig, f"{out}/01_ci_reward_curves.png")
 
 
-# ── 02: Convergence speed ─────────────────────────────────────────────────────
 
 def plot_convergence_speed(all_seed_histories, out, threshold_pct=0.8):
     """Episodes to reach threshold_pct of max reward."""
@@ -105,7 +102,6 @@ def plot_convergence_speed(all_seed_histories, out, threshold_pct=0.8):
     _save(fig, f"{out}/02_convergence_speed.png")
 
 
-# ── 03: Cumulative reward ─────────────────────────────────────────────────────
 
 def plot_cumulative_reward(histories, out):
     fig, ax = _fig("Cumulative Reward Over Training", "Episode", "Cumulative Reward")
@@ -114,7 +110,6 @@ def plot_cumulative_reward(histories, out):
     ax.legend(fontsize=9); _save(fig, f"{out}/03_cumulative_reward.png")
 
 
-# ── 04: Delayed consequence ───────────────────────────────────────────────────
 
 def plot_delayed_consequence(histories, out):
     fig, ax = _fig("Delayed Consequence per Episode (smoothed)", "Episode", "Consequence")
@@ -123,7 +118,6 @@ def plot_delayed_consequence(histories, out):
     ax.legend(fontsize=9); _save(fig, f"{out}/04_delayed_consequence.png")
 
 
-# ── 05: Training stability ────────────────────────────────────────────────────
 
 def plot_stability(histories, out):
     fig, ax = _fig("Training Stability (rolling σ of reward)", "Episode", "Rolling Std")
@@ -135,7 +129,6 @@ def plot_stability(histories, out):
     ax.legend(fontsize=9); _save(fig, f"{out}/05_stability.png")
 
 
-# ── 06: Transfer score ────────────────────────────────────────────────────────
 
 def plot_transfer_score(transfer_scores, out, title="Zero-Shot Transfer Score"):
     agents = list(transfer_scores.keys())
@@ -149,7 +142,6 @@ def plot_transfer_score(transfer_scores, out, title="Zero-Shot Transfer Score"):
     _save(fig, f"{out}/06_transfer_score.png")
 
 
-# ── 07: Compute-performance tradeoff ─────────────────────────────────────────
 
 def plot_compute_performance(histories, eval_results, env_names, out):
     fig, ax = _fig("Compute–Performance Tradeoff",
@@ -166,7 +158,6 @@ def plot_compute_performance(histories, eval_results, env_names, out):
     _save(fig, f"{out}/07_compute_performance.png")
 
 
-# ── 08: Per-environment ranking ───────────────────────────────────────────────
 
 def plot_per_env_ranking(eval_results, env_names, out):
     agents = list(eval_results.keys())
@@ -195,7 +186,6 @@ def plot_per_env_ranking(eval_results, env_names, out):
     _save(fig, f"{out}/08_per_env_ranking.png")
 
 
-# ── 09: Ablation comparison ───────────────────────────────────────────────────
 
 def plot_ablation_comparison(ablation_results, env_names, out):
     """ablation_results: {variant_name: {env: metrics}}"""
@@ -223,7 +213,6 @@ def plot_ablation_comparison(ablation_results, env_names, out):
     _save(fig, f"{out}/09_ablation_comparison.png")
 
 
-# ── 10: Unseen environment transfer ──────────────────────────────────────────
 
 def plot_unseen_transfer(unseen_results, unseen_envs, out):
     if not unseen_results:
@@ -249,7 +238,6 @@ def plot_unseen_transfer(unseen_results, unseen_envs, out):
     _save(fig, f"{out}/10_unseen_transfer.png")
 
 
-# ── 11: Sample efficiency ─────────────────────────────────────────────────────
 
 def plot_sample_efficiency(histories, out):
     fig, ax = _fig("Running Mean Training Return", "Episode", "Mean Return")
@@ -259,7 +247,6 @@ def plot_sample_efficiency(histories, out):
     ax.legend(fontsize=9); _save(fig, f"{out}/11_sample_efficiency.png")
 
 
-# ── 12: Regret reduction ──────────────────────────────────────────────────────
 
 def plot_regret_reduction(histories, out, use_per_agent_oracle: bool = False):
     if use_per_agent_oracle:
@@ -278,7 +265,6 @@ def plot_regret_reduction(histories, out, use_per_agent_oracle: bool = False):
     ax.legend(fontsize=9); _save(fig, f"{out}/12_regret_reduction.png")
 
 
-# ── 13: Final ranking ─────────────────────────────────────────────────────────
 
 def plot_final_ranking(eval_results, env_names, out):
     agents = [n for n in eval_results if n in eval_results]
@@ -296,10 +282,8 @@ def plot_final_ranking(eval_results, env_names, out):
     _save(fig, f"{out}/13_final_ranking.png")
 
 
-# ── 14: CCPL consequence diagnostics ─────────────────────────────────────────
 
 def plot_ccpl_diagnostics(history, out):
-    # FIX-B15: use flexible key matching instead of exact "CCPL" check
     ccpl_key = _find_ccpl_key(history)
     if ccpl_key is None:
         warnings.warn(
@@ -333,7 +317,6 @@ def plot_ccpl_diagnostics(history, out):
     print(f"  Saved: {path}")
 
 
-# ── 15: Parameter count comparison ───────────────────────────────────────────
 
 def plot_param_count(histories, out):
     names  = [n for n, h in histories.items() if "param_count" in h]

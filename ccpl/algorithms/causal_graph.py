@@ -60,9 +60,6 @@ COUNTERFACTUAL ENGINE:
 import numpy as np
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Structural Causal Model
-# ─────────────────────────────────────────────────────────────────────────────
 
 class EnvironmentSCM:
     """
@@ -75,13 +72,12 @@ class EnvironmentSCM:
       3. Diagnose ICN agreement with its synthetic reference labels
     """
 
-    # Deterministic immediate-cost terms from BaseEnv._transition().
     _ACTION_EFFECTS = {
-        0: dict(drl=-0.05, dfr= 0.08,  dsp= 0.05, dhpl_coeff=0.0),   # DEFER
-        1: dict(drl= 0.10, dfr=-0.04,  dsp=-0.03, dhpl_coeff=0.0),   # PARTIAL
-        2: dict(drl= 0.25, dfr=-0.10,  dsp=-0.06, dhpl_coeff=0.15),  # FULL
-        3: dict(drl= 0.12, dfr=-0.20,  dsp=-0.08, dhpl_coeff=0.0),   # INVEST
-        4: dict(drl=-0.10, dfr= 0.02,  dsp=-0.15, dhpl_coeff=0.0),   # REBALANCE
+        0: dict(drl=-0.05, dfr= 0.08,  dsp= 0.05, dhpl_coeff=0.0),
+        1: dict(drl= 0.10, dfr=-0.04,  dsp=-0.03, dhpl_coeff=0.0),
+        2: dict(drl= 0.25, dfr=-0.10,  dsp=-0.06, dhpl_coeff=0.15),
+        3: dict(drl= 0.12, dfr=-0.20,  dsp=-0.08, dhpl_coeff=0.0),
+        4: dict(drl=-0.10, dfr= 0.02,  dsp=-0.15, dhpl_coeff=0.0),
     }
 
     def __init__(self, noise_std: float = 0.0):
@@ -192,9 +188,6 @@ class EnvironmentSCM:
         }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ICN Ground Truth Label Generator
-# ─────────────────────────────────────────────────────────────────────────────
 
 class CausalLabelGenerator:
     """
@@ -227,7 +220,6 @@ class CausalLabelGenerator:
         delta_C_all  = np.zeros((B, n_actions), np.float32)
         baseline     = np.zeros(B, np.float32)
 
-        # Guard: SCM only applies to the 6-dim base environment
         if states.shape[1] != 6:
             return {"delta_C_scm": delta_C_scm,
                     "delta_C_all": delta_C_all,

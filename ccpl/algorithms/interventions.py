@@ -6,7 +6,7 @@ import numpy as np
 
 try:
     from .causal_graph import EnvironmentSCM
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from causal_graph import EnvironmentSCM
 
 

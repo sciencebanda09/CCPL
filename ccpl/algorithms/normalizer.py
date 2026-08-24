@@ -25,10 +25,6 @@ class StateNormalizer:
 
     def normalize(self, x: np.ndarray) -> np.ndarray:
         x = np.asarray(x, np.float32)
-        # A population variance from zero or one observation is either
-        # undefined for scaling or exactly zero.  Preserve the bounded raw
-        # features during that short warm-up instead of saturating them at the
-        # clip limit after the first update.
         if self.count < 2:
             return np.clip(x, -self.clip, self.clip).astype(np.float32)
         normed = (x - self.mean.astype(np.float32)) / (

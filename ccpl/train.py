@@ -20,7 +20,7 @@ import numpy as np
 try:
     from .environments import ENV_REGISTRY
     from .algorithms.ccpl_agent import run_episode
-except ImportError:  # Legacy checkout imports.
+except ImportError:
     from environments import ENV_REGISTRY
     from ccpl_agent import run_episode
 
@@ -30,9 +30,6 @@ EVAL_ENVS        = ("standard", "noisy", "shifted")
 UNSEEN_EVAL_ENVS = ("adversarial", "deceptive_reward", "resource_collapse")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Baseline episode runner  (PPO / A2C / DQN / constrained baselines)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_episode_baseline(agent, env, train: bool = True,
                           update_freq: int = 4) -> dict:
@@ -61,9 +58,6 @@ def run_episode_baseline(agent, env, train: bool = True,
 
         if train:
             agent.store(state, action, r, ns, c, done)
-            # On-policy agents must consume an exact rollout once it is ready;
-            # checking only every fourth step skipped the first transition of
-            # 64-step windows and repeatedly reused overlapping windows.
             should_update = (hasattr(agent, "_rollout")
                              or int(ep_steps) % update_freq == 0)
             if should_update:
@@ -93,9 +87,6 @@ def run_episode_baseline(agent, env, train: bool = True,
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Parameter counter
-# ─────────────────────────────────────────────────────────────────────────────
 
 def count_parameters(agent) -> int:
     """Count unique arrays registered with optimizers, excluding target nets.
@@ -152,9 +143,6 @@ def count_parameters(agent) -> int:
     return total
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _fmt_eta(seconds: float) -> str:
     if seconds < 0:
@@ -195,9 +183,6 @@ def save_eval_results(results: dict, label: str, log_dir: str) -> str:
     return path
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main training loop
-# ─────────────────────────────────────────────────────────────────────────────
 
 def train_agent(agent, n_episodes: int = 600, max_steps: int = 100,
                 delay_steps: int = 5, update_freq: int = 4,
@@ -226,7 +211,6 @@ def train_agent(agent, n_episodes: int = 600, max_steps: int = 100,
         "cumulative_reward", "cumulative_consequence",
         "env_name", "episode_time_s", "infer_ms")}
 
-    # Extended keys for CCPL agents
     if is_ccpl:
         for key in ("hit_freq_ema", "lambda_scale", "mean_lambda",
                     "expected_delay", "delay_loss"):

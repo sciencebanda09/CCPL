@@ -11,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ccpl" / "algorithms"))
 sys.path.insert(0, str(ROOT / "ccpl" / "environments"))
 
-from ccpl_agent import make_ccpl  # noqa: E402
-from environments import StandardEnv  # noqa: E402
-from ccpl_agent import run_episode  # noqa: E402
+from ccpl_agent import make_ccpl
+from environments import StandardEnv
+from ccpl_agent import run_episode
 
 
 def run_comparison(episodes=100, evaluation_episodes=20, seeds=(0, 1, 2), max_steps=50):

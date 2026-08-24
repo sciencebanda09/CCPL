@@ -55,7 +55,6 @@ def main(argv=None):
     parser.add_argument("--ablation", action="store_true")
     parser.add_argument("--safety", action="store_true")
 
-    # Parse obsolete flags so old shell scripts fail gracefully and visibly.
     parser.add_argument("--log-dir", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--custom-only", action="store_true",
                         help=argparse.SUPPRESS)
