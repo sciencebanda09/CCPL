@@ -106,6 +106,28 @@ Inspect the initial layout in the terminal:
 saferoute render
 ```
 
+Record one evaluation episode as an animated 3D GIF:
+
+```bash
+saferoute record3d --checkpoint results/ccpl.pkl \
+  --seed 42 --output results/ccpl_saferoute_3d.gif
+```
+
+The recording uses the checkpoint policy and shows raised hazard cells, the
+goal, the agent path, and the delayed cost at each step. GIF output requires
+Matplotlib's Pillow support, which is included by the project dependencies.
+
+Export the complete article-visualization suite:
+
+```bash
+saferoute record-suite --checkpoint results/ccpl.pkl \
+  --seed 42 --output results/visual_suite
+```
+
+The suite writes top-down movement, a risk heatmap, a delayed-consequence
+timeline, a policy comparison, training progress, a lambda dashboard, and a
+rotating 3D risk-surface animation.
+
 ## Environment
 
 The action space is discrete:

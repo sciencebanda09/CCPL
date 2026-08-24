@@ -25,6 +25,7 @@ Every result must report reward and consequence metrics together.
 3. `adversarial`: held-out stress tests; do not tune on these environments.
 4. `safety`: optional external-environment evaluation with package and task versions.
 5. `theory`: contraction, multiplier, and synthetic causal-label diagnostics.
+6. `E10`: SCM-quality robustness under noisy, misspecified, and observational-only attribution.
 
 The repository includes `CPO-FO`, a first-order approximation of constrained
 policy optimization. It must not be reported as an exact conjugate-gradient
@@ -37,6 +38,7 @@ For every reported result, preserve:
 
 - the exact command and configuration;
 - all random seeds and per-seed metrics;
+- SCM-quality mode and whether causal labels were available;
 - Python, package, MuJoCo, and environment versions;
 - the source revision or archive hash;
 - training and evaluation episode counts;

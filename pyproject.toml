@@ -31,4 +31,4 @@ target-version = "py310"
 [tool.setuptools]
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ccpl*"]
+include = ["ccpl", "ccpl.*"]

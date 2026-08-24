@@ -1058,11 +1058,96 @@ def run_E9(args):
     return averaged
 
 
+class _SCMQualityLabels:
+    def __init__(self, base, mode, seed):
+        self.base = base
+        self.mode = mode
+        self.rng = np.random.default_rng(seed)
+
+    def generate_batch(self, states, actions, n_actions=5):
+        labels = self.base.generate_batch(states, actions, n_actions)
+        if self.mode == "noisy":
+            labels["delta_C_scm"] = labels["delta_C_scm"] + self.rng.normal(
+                0.0, 0.15, len(states)).astype(np.float32)
+        elif self.mode == "misspecified":
+            labels = dict(labels)
+            labels["delta_C_scm"] = labels["delta_C_all"][:, (np.asarray(actions) + 1) % n_actions]
+        return labels
+
+
+def _multi_action_diagnostic(agent, seed, n_sequences=128, horizon=3):
+    rng = np.random.default_rng(seed)
+    states = rng.uniform(0.1, 0.9, (n_sequences, horizon, STATE_DIM)).astype(np.float32)
+    actions = rng.integers(0, ACTION_DIM, (n_sequences, horizon), dtype=np.int32)
+    flat_states = states.reshape(-1, STATE_DIM)
+    flat_actions = actions.reshape(-1)
+    contexts = np.zeros((len(flat_states), agent.icn.causal_dim), np.float32)
+    predicted, _, _, _ = agent.icn.forward(flat_states, flat_actions, contexts)
+    labels = CausalLabelGenerator(EnvironmentSCM()).generate_batch(
+        flat_states, flat_actions, ACTION_DIM)
+    target = labels["delta_C_scm"]
+    return {
+        "horizon": horizon,
+        "sequences": n_sequences,
+        "mae": float(np.mean(np.abs(predicted - target))),
+        "sign_agreement": float(np.mean(np.sign(predicted) == np.sign(target))),
+        "scope": "sequential per-action SCM contrasts; not joint Shapley attribution",
+    }
+
+
+def run_E10(args):
+    _sep("E10 - SCM Quality and Attribution Robustness")
+    out = os.path.join(args.out, "E10")
+    os.makedirs(out, exist_ok=True)
+    modes = ("oracle_scm", "noisy_scm", "misspecified_scm", "observational_only")
+    all_results = []
+    for seed_i in range(args.seeds):
+        seed = args.seed + seed_i * 100
+        seed_results = {"seed": seed, "modes": {}}
+        for mode in modes:
+            agent = make_ccpl(STATE_DIM, ACTION_DIM, seed=seed,
+                              pretrain_steps=0 if args.quick or args.episodes < 10 else 200)
+            if mode != "oracle_scm":
+                agent.label_gen = _SCMQualityLabels(agent.label_gen, mode, seed + 17)
+            if mode == "observational_only":
+                agent.has_scm_labels = False
+            train_agent(agent, n_episodes=args.episodes, max_steps=args.max_steps,
+                        delay_steps=args.delay, seed=seed, verbose=args.verbose,
+                        log_freq=max(1, args.episodes // 4), env_names=list(TRAIN_ENVS))
+            metrics = evaluate_all({mode: agent}, list(EVAL_ENVS), args.eval_episodes,
+                                   args.max_steps, args.delay)[mode]
+            seed_results["modes"][mode] = {
+                "environment_metrics": metrics,
+                "multi_action": _multi_action_diagnostic(agent, seed + 31),
+            }
+        all_results.append(seed_results)
+    summary = {}
+    for mode in modes:
+        rows = [metrics
+                for item in all_results
+                for metrics in item["modes"][mode]["environment_metrics"].values()]
+        summary[mode] = {
+            "mean_reward": float(np.mean([row["mean_reward"] for row in rows])),
+            "mean_consequence": float(np.mean([row["mean_consequence"] for row in rows])),
+            "csr": float(np.mean([row["constraint_satisfaction_rate"] for row in rows])),
+            "seeds": len(all_results),
+            "environment_metrics": len(rows),
+        }
+    _save({"protocol": {
+        "label_source": "SCM-generated for oracle/noisy/misspecified modes; none for observational_only",
+        "modes": list(modes), "seed_values": [item["seed"] for item in all_results],
+        "train_environments": list(TRAIN_ENVS), "eval_environments": list(EVAL_ENVS),
+        "multi_action": "sequential per-action diagnostic; not a joint credit-assignment theorem",
+    }, "summary": summary, "seed_results": all_results}, "E10_scm_quality", out)
+    print(json.dumps(summary, indent=2))
+    return summary
+
+
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="CCPL Extended Experiment Suite")
     p.add_argument("--exp",  default="E1",
-                   choices=["E1","E2","E3","E4","E5","E6","E7","E8","E9","theory","all"])
+                   choices=["E1","E2","E3","E4","E5","E6","E7","E8","E9","E10","theory","all"])
     p.add_argument("--all",  action="store_true", help="Run all experiments")
     p.add_argument("--episodes",      type=int, default=500)
     p.add_argument("--eval-episodes", type=int, default=50)
@@ -1088,7 +1173,7 @@ def main(argv=None):
     runners = {
         "E1": run_E1, "E2": run_E2, "E3": run_E3,
         "E4": run_E4, "E5": run_E5, "E6": run_E6,
-        "E7": run_E7, "E8": run_E8, "E9": run_E9,
+        "E7": run_E7, "E8": run_E8, "E9": run_E9, "E10": run_E10,
         "theory": run_theory_verification,
     }
 

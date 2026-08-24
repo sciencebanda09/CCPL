@@ -9,7 +9,9 @@ import numpy as np
 from ccpl import make_ccpl, run_episode
 
 from .env import SafeRouteEnv
-from .visualize import save_dashboard
+from .visualize import (save_3d_episode, save_dashboard, save_heatmap_episode,
+                        save_lambda_dashboard, save_metric_animation,
+                        save_policy_comparison, save_timeline, save_topdown_episode)
 
 
 def _agent(seed, state_dim=12):
@@ -164,6 +166,60 @@ def render(args):
     print(f"step={env.step_count} position={env.position} goal={env.goal} delay={env.delay}")
 
 
+def record3d(args):
+    from ccpl import CCPLAgent
+
+    env = SafeRouteEnv(seed=args.seed, delay=args.delay)
+    agent = CCPLAgent.load(args.checkpoint)
+    result = run_episode(agent, env, train=False)
+    stats = env.episode_stats()
+    save_3d_episode(stats["trace"], stats["size"], env.goal, stats["hazards"],
+                    args.output, fps=args.fps)
+    print(f"episode_reward={result['episode_reward']:.3f} "
+          f"episode_cost={result['episode_consequence']:.3f}")
+    print(f"recording={args.output}")
+
+
+def record_suite(args):
+    from ccpl import CCPLAgent
+
+    output = Path(args.output)
+    output.mkdir(parents=True, exist_ok=True)
+    env = SafeRouteEnv(seed=args.seed, delay=args.delay)
+    agent = CCPLAgent.load(args.checkpoint)
+    run_episode(agent, env, train=False)
+    stats = env.episode_stats()
+    trace = stats["trace"]
+    save_topdown_episode(trace, stats["size"], env.goal, stats["hazards"],
+                         output / "01_topdown.gif", args.fps)
+    save_heatmap_episode(trace, stats["size"], env.goal, stats["hazards"],
+                         output / "02_risk_heatmap.gif", args.fps)
+    save_timeline(trace, output / "03_delayed_timeline.gif", args.fps)
+
+    traces = {"CCPL": trace}
+    for name in ("reactive", "oracle"):
+        reference = SafeRouteEnv(seed=args.seed, delay=args.delay)
+        while not reference.done:
+            state = reference._observation()
+            action = (_reactive_action(state) if name == "reactive"
+                      else _oracle_action(reference))
+            reference.step(action)
+        traces[name] = reference.episode_stats()["trace"]
+    save_policy_comparison(traces, stats["size"], env.goal, stats["hazards"],
+                           output / "04_policy_comparison.gif", args.fps)
+
+    history_path = Path(args.checkpoint).with_suffix(".json")
+    if history_path.exists():
+        history = json.loads(history_path.read_text(encoding="utf-8"))["history"]
+        save_metric_animation(history, output / "05_training_progress.gif", args.fps)
+        save_lambda_dashboard(history, output / "06_lambda_dashboard.gif", args.fps)
+    else:
+        print(f"warning=training history not found at {history_path}")
+    save_3d_episode(trace, stats["size"], env.goal, stats["hazards"],
+                    output / "07_rotating_3d.gif", args.fps, azim=args.azim)
+    print(f"visualizations={output}")
+
+
 def dashboard(args):
     save_dashboard(args.evaluation, args.output)
     print(f"dashboard={args.output}")
@@ -272,6 +328,23 @@ def main():
     render_parser.add_argument("--delay", type=int, default=3)
     render_parser.add_argument("--seed", type=int, default=42)
     render_parser.set_defaults(func=render)
+
+    record_parser = sub.add_parser("record3d")
+    record_parser.add_argument("--checkpoint", default="results/ccpl.pkl")
+    record_parser.add_argument("--delay", type=int, default=3)
+    record_parser.add_argument("--seed", type=int, default=42)
+    record_parser.add_argument("--fps", type=int, default=8)
+    record_parser.add_argument("--output", default="results/ccpl_saferoute_3d.gif")
+    record_parser.set_defaults(func=record3d)
+
+    suite_parser = sub.add_parser("record-suite")
+    suite_parser.add_argument("--checkpoint", default="results/ccpl.pkl")
+    suite_parser.add_argument("--delay", type=int, default=3)
+    suite_parser.add_argument("--seed", type=int, default=42)
+    suite_parser.add_argument("--fps", type=int, default=8)
+    suite_parser.add_argument("--azim", type=float, default=-58)
+    suite_parser.add_argument("--output", default="results/visual_suite")
+    suite_parser.set_defaults(func=record_suite)
 
     args = parser.parse_args()
     args.func(args)
