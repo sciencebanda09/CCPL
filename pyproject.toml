@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ccpl-rl"
-version = "0.7.6"
+version = "0.7.7"
 description = "Causal Consequence-Penalized Learning for delayed constrained reinforcement learning"
 readme = "README.md"
 requires-python = ">=3.10"
