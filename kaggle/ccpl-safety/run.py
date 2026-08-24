@@ -14,11 +14,27 @@ subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade",
 subprocess.run([sys.executable, "-m", "pip", "install", "--no-deps",
                 "gymnasium-robotics==1.2.2", "safety-gymnasium==1.0.0"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], cwd=repo, check=True)
+Path("/kaggle/working/sitecustomize.py").write_text(
+    """import dataclasses, inspect, numpy as np
+_source = inspect.getsource(dataclasses._get_field)
+_source = _source.replace(
+    "if f._field_type is _FIELD and f.default.__class__.__hash__ is None:",
+    "if (f._field_type is _FIELD and f.default.__class__.__hash__ is None "
+    "and not isinstance(f.default, np.ndarray)):"
+)
+_namespace = dataclasses.__dict__.copy()
+_namespace["np"] = np
+exec(_source, _namespace)
+dataclasses._get_field = _namespace["_get_field"]
+""",
+    encoding="utf-8")
+child_env = os.environ.copy()
+child_env["PYTHONPATH"] = "/kaggle/working:/kaggle/working/CCPL"
 common = ["--episodes", "1000", "--eval-episodes", "100", "--seeds", "5",
           "--max-steps", "100", "--delay", "5", "--out", "/kaggle/working/results"]
 for experiment in ("E8", "E9"):
     subprocess.run([sys.executable, "ccpl_experiments.py", "--exp", experiment,
-                    *common], cwd=repo, check=True)
+                    *common], cwd=repo, check=True, env=child_env)
 archive = Path("/kaggle/working/ccpl_safety_results.tar.gz")
 subprocess.run(["tar", "-czf", str(archive), "-C", "/kaggle/working", "results"], check=True)
 print(archive)
