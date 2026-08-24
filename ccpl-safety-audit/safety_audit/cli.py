@@ -1,16 +1,28 @@
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 
+_repository_root = Path(__file__).resolve().parents[2]
+if str(_repository_root) not in sys.path:
+    sys.path.insert(0, str(_repository_root))
+_saferoute_root = _repository_root / "ccpl-saferoute"
+if str(_saferoute_root) not in sys.path:
+    sys.path.insert(0, str(_saferoute_root))
+
 from ccpl import CCPLAgent, ENV_REGISTRY, make_env, run_episode
+from saferoute.env import SafeRouteEnv
 
 
 def _evaluate(agent, env_name, delay, episodes, seeds, max_steps, threshold):
     rows = []
     for seed in seeds:
-        env = make_env(env_name, max_steps=max_steps, consequence_delay=delay, seed=seed)
+        if env_name == "saferoute":
+            env = SafeRouteEnv(seed=seed, delay=delay)
+        else:
+            env = make_env(env_name, max_steps=max_steps, consequence_delay=delay, seed=seed)
         rewards, costs, completed = [], [], []
         for _ in range(episodes):
             result = run_episode(agent, env, train=False)
@@ -34,12 +46,14 @@ def _evaluate(agent, env_name, delay, episodes, seeds, max_steps, threshold):
 
 def audit(args):
     agent = CCPLAgent.load(args.checkpoint)
-    env_names = args.environments or list(ENV_REGISTRY)
+    env_names = args.environments
+    if not env_names:
+        env_names = ["saferoute"] if getattr(agent, "state_dim", 6) == 12 else list(ENV_REGISTRY)
     seeds = [int(value) for value in args.seeds.split(",") if value.strip()]
     delays = [int(value) for value in args.delays.split(",") if value.strip()]
     results = {}
     for env_name in env_names:
-        if env_name not in ENV_REGISTRY:
+        if env_name != "saferoute" and env_name not in ENV_REGISTRY:
             raise ValueError(f"unknown environment: {env_name}")
         results[env_name] = {}
         for delay in delays:
