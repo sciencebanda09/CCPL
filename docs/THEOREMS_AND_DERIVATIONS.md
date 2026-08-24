@@ -179,8 +179,8 @@ contrast is
 
 $$
 \Delta C(s,a,u)
-  =C^{\operatorname{do}(a)}(s,u)
-   -C^{\operatorname{do}(a_0)}(s,u).
+  =C^{\mathrm{do}(a)}(s,u)
+   -C^{\mathrm{do}(a_0)}(s,u).
 $$
 
 The synthetic structural causal model supplies labels for this quantity. The
