@@ -9,7 +9,7 @@ os.environ["PYOPENGL_PLATFORM"] = "egl"
 repo = Path("/kaggle/working/CCPL")
 subprocess.run(["git", "clone", "--depth", "1", "https://github.com/sciencebanda09/CCPL.git", str(repo)], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade",
-                "numpy<2", "gymnasium==0.29.1", "mujoco==3.1.6",
+                "numpy<2", "gymnasium==0.28.1", "mujoco==3.1.6",
                 "safety-gymnasium==1.0.0", "xmltodict", "pygame==2.6.1"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], cwd=repo, check=True)
 common = ["--episodes", "1000", "--eval-episodes", "100", "--seeds", "5",
