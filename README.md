@@ -28,6 +28,22 @@ universal dominance over a scalar multiplier. Synthetic SCM experiments
 evaluate agreement with programmed structural equations; they do not identify
 causality from observational data.
 
+### Implementation flow
+
+```mermaid
+flowchart LR
+    E[Environment] --> T[Delayed transition]
+    T --> D[Delay model]
+    T --> C[Consequence Net]
+    T --> R[Reward critic]
+    T --> Q[Constraint critic]
+    D --> P[CCPL policy]
+    C --> P
+    R --> P
+    Q --> P
+    P --> E
+```
+
 ## Installation
 
 The PyPI distribution is `ccpl-rl`; the Python import namespace is `ccpl`.
