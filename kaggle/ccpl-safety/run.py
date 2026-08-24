@@ -10,9 +10,9 @@ repo = Path("/kaggle/working/CCPL")
 subprocess.run(["git", "clone", "--depth", "1", "https://github.com/sciencebanda09/CCPL.git", str(repo)], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade",
                 "numpy<2", "gymnasium==0.28.1", "mujoco==3.1.6",
-                "gymnasium-robotics==1.2.2", "xmltodict"], check=True)
+                "xmltodict"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--no-deps",
-                "safety-gymnasium==1.0.0"], check=True)
+                "gymnasium-robotics==1.2.2", "safety-gymnasium==1.0.0"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], cwd=repo, check=True)
 common = ["--episodes", "1000", "--eval-episodes", "100", "--seeds", "5",
           "--max-steps", "100", "--delay", "5", "--out", "/kaggle/working/results"]
