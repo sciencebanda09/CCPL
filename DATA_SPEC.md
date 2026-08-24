@@ -1,37 +1,42 @@
-# Data specification
+# Data Specification
 
-CCPL currently uses synthetic controlled Markov decision processes and
-optional Safety Gymnasium-compatible environments. No external dataset is
-required for the default benchmark.
+The default benchmark generates data from synthetic controlled Markov decision
+processes. No external dataset is required. Optional Safety Gymnasium runs
+obtain observations and costs from the environment.
 
-## Transition record
+## Transition Record
 
-Each environment step produces:
+At step (t), the logical transition is
+
+\[
+\mathcal{T}_t=(s_t,a_t,r_t,s_{t+1},c_t,\mathrm{done}_t,\mathrm{info}_t).
+\]
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `state` | `float32[state_dim]` | Observation before the action |
-| `action` | `int` | Discrete controller action |
-| `reward` | `float` | Reward emitted at this step |
+| `action` | `int` | Zero-based discrete action |
+| `reward` | `float` | Reward emitted by the environment |
 | `next_state` | `float32[state_dim]` | Observation after the action |
-| `consequence` | `float` | Cost emitted after the configured delay |
+| `consequence` | `float` | Cost aligned with the causal transition |
 | `done` | `bool` | Episode termination flag |
 | `info` | mapping | Delay, causal-label, and episode diagnostics |
 
-The source consequence and emitted consequence are deliberately distinct.
-Delayed feedback must be aligned back to the transition that caused it before
-it is used as a supervised causal target.
+The source consequence and emitted consequence are distinct. Delayed feedback
+must be aligned with the transition that caused it before it is used as a
+supervised causal target.
 
-## State conventions
+## State and Action Conventions
 
-The canonical synthetic environment uses six normalized state variables. Safety
-Gymnasium adapters may use higher-dimensional observations and therefore do not
+The canonical synthetic environment uses six normalized state variables. The
+Safety Gymnasium adapter accepts higher-dimensional observations but does not
 receive synthetic SCM labels. Action indices are zero-based and environment
-specific; configurations must record `action_dim`.
+specific; every configuration must record `action_dim`.
 
-## Artifact rules
+## Artifact Requirements
 
-Generated results belong under a named results directory and must include the
-experiment configuration, seeds, environment names, code version, and metric
-definitions. Large local data and model checkpoints are ignored by Git; do not
-commit private or externally sourced data without authorization.
+Generated results belong under a named results directory. Store the command,
+configuration, seed list, source revision, dependency versions, environment
+identifiers, metric definitions, and timestamp beside the results. Large local
+data, caches, and checkpoints are ignored by Git. Do not commit private or
+externally licensed data without authorization.

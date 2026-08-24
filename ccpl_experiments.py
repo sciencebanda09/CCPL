@@ -22,8 +22,17 @@ Run all:
 """
 
 import os, time, json, argparse
+import sys
+from pathlib import Path
 import numpy as np
 import warnings
+
+ROOT = Path(__file__).resolve().parent
+for _source in (ROOT / "ccpl", ROOT / "ccpl" / "algorithms", ROOT / "ccpl" / "environments"):
+    _source = str(_source)
+    if _source not in sys.path:
+        sys.path.insert(0, _source)
+
 from plots import (
     generate_all_plots,
     plot_ci_reward_curves,
@@ -707,12 +716,33 @@ def run_E8(args):
     out = os.path.join(args.out, "E8")
     os.makedirs(out, exist_ok=True)
 
+    requested_tasks = getattr(args, "tasks", "")
+    requested_tasks = [name.strip() for name in requested_tasks.split(",") if name.strip()]
     sg_tasks = list(SAFETY_GYM_ENV_REGISTRY.keys())
+    if requested_tasks:
+        unknown = sorted(set(requested_tasks) - set(sg_tasks))
+        if unknown:
+            raise ValueError(f"Unknown Safety Gymnasium tasks: {unknown}")
+        sg_tasks = [name for name in sg_tasks if name in requested_tasks]
     if not sg_tasks:
         print("  No Safety Gym tasks registered. Skipping E8.")
         return {}
 
     print(f"  Tasks: {sg_tasks}")
+
+    compatible_tasks = []
+    for task_name in sg_tasks:
+        try:
+            probe = SAFETY_GYM_ENV_REGISTRY[task_name](seed=args.seed, max_steps=args.max_steps)
+            if hasattr(probe, "close"):
+                probe.close()
+            compatible_tasks.append(task_name)
+        except Exception as exc:
+            print(f"  Skipping {task_name}: incompatible external dependency ({exc})")
+    sg_tasks = compatible_tasks
+    if not sg_tasks:
+        print("  No compatible Safety Gymnasium tasks available. Skipping E8.")
+        return {}
 
     all_results = {}
 
@@ -731,8 +761,7 @@ def run_E8(args):
             sg_state_dim  = probe_env.state_dim
             sg_action_dim = probe_env.action_dim
             cost_budget   = probe_env.constraint_threshold
-            if hasattr(probe_env, "close"):
-                probe_env.close()
+            shared_env = probe_env
 
             print(f"    state_dim={sg_state_dim}  action_dim={sg_action_dim}")
 
@@ -740,6 +769,8 @@ def run_E8(args):
             sg_agents = {
                 "CCPL":     make_ccpl(sg_state_dim, sg_action_dim, seed=seed,
                                       pretrain_steps=0, constraint_d=cost_budget),
+                "CPO-FO":   CPOAgent(sg_state_dim, sg_action_dim, seed=seed,
+                                     cost_limit=cost_budget),
                 "PPO":      PPOAgent(sg_state_dim, sg_action_dim, seed=seed),
                 "SAC-Lag":  SACLagrangianAgent(
                     sg_state_dim, sg_action_dim,
@@ -753,8 +784,9 @@ def run_E8(args):
                 ep_rewards, ep_costs, ep_csrs = [], [], []
 
                 for ep in range(args.episodes):
-                    env = SAFETY_GYM_ENV_REGISTRY[task_name](
-                        seed=seed + ep, max_steps=args.max_steps)
+                    env = (shared_env if ep == 0 else
+                           SAFETY_GYM_ENV_REGISTRY[task_name](
+                               seed=seed + ep, max_steps=args.max_steps))
                     runner = run_episode if isinstance(agent, CCPLAgent) else run_episode_baseline
                     episode = runner(agent, env, train=True)
                     ep_rewards.append(episode["episode_reward"])
@@ -762,13 +794,16 @@ def run_E8(args):
                     ep_csrs.append(100.0 * (
                         episode["episode_consequence"] <= cost_budget
                     ))
-                    if hasattr(env, "close"):
+                    if ep != 0 and hasattr(env, "close"):
                         env.close()
 
                     if (ep + 1) % max(1, args.episodes // 4) == 0:
                         recent_r   = float(np.mean(ep_rewards[-20:]))
                         recent_csr = float(np.mean(ep_csrs[-20:]))
                         print(f"      ep {ep+1:4d}: R={recent_r:+.3f}  CSR={recent_csr:.1f}%")
+
+            if hasattr(shared_env, "close"):
+                shared_env.close()
 
                 # Held-out evaluation with disjoint environment seeds.
                 eval_rewards, eval_costs, eval_costs_raw, eval_csrs = [], [], [], []
@@ -808,7 +843,7 @@ def run_E8(args):
     averaged = {}
     for task in sg_tasks:
         averaged[task] = {}
-        for name in ["CCPL", "PPO", "SAC-Lag", "CCPL-Base"]:
+        for name in ["CCPL", "CPO-FO", "PPO", "SAC-Lag", "CCPL-Base"]:
             seed_data = [all_results["seed_results"][si].get(task, {}).get(name, {})
                          for si in range(args.seeds)
                          if all_results["seed_results"][si].get(task, {}).get(name)]
@@ -841,7 +876,7 @@ def run_E8(args):
     import matplotlib.pyplot as plt
     from plots import COLORS, _smooth
 
-    agent_names = ["CCPL", "PPO", "SAC-Lag", "CCPL-Base"]
+    agent_names = ["CCPL", "CPO-FO", "PPO", "SAC-Lag", "CCPL-Base"]
     n_tasks = len(sg_tasks)
 
     # Plot 1: Reward per task per agent
@@ -1117,6 +1152,8 @@ def main(argv=None):
     p.add_argument("--verbose",       action="store_true")
     p.add_argument("--quick",         action="store_true",
                    help="200 episodes, 1 seed, 20 eval episodes")
+    p.add_argument("--tasks",         type=str, default="",
+                   help="Comma-separated E8 task names; empty means all")
     args = p.parse_args(argv)
 
     if args.quick:

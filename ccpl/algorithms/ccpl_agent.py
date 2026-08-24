@@ -13,7 +13,9 @@ The reward critic uses the ordinary one-step discount.  A learned
 """
 
 import math
+import pickle
 import time
+from pathlib import Path
 import numpy as np
 
 try:
@@ -51,6 +53,51 @@ class CCPLAgent:
       label_gen    — CausalLabelGenerator          (Direction 3 pretraining)
     """
     name = "CCPL"
+
+    def predict(self, observation) -> int:
+        """Return a deterministic evaluation action for one observation."""
+        return self.select_action(np.asarray(observation, dtype=np.float32), eval_mode=True)
+
+    def act(self, observation, deterministic: bool = True) -> int:
+        """Stable action API compatible with common RL integrations."""
+        return self.select_action(
+            np.asarray(observation, dtype=np.float32), eval_mode=bool(deterministic)
+        )
+
+    def fit(self, env, episodes: int = 1, update_freq: int = 4,
+            verbose: bool = False) -> list:
+        """Train on an environment implementing the CCPL episode interface."""
+        if int(episodes) < 1:
+            raise ValueError("episodes must be positive")
+        if int(update_freq) < 1:
+            raise ValueError("update_freq must be positive")
+        results = []
+        for episode in range(int(episodes)):
+            result = run_episode(self, env, train=True, update_freq=update_freq)
+            results.append(result)
+            if verbose:
+                print(
+                    f"episode={episode + 1} reward={result['episode_reward']:.4f} "
+                    f"consequence={result['episode_consequence']:.4f}"
+                )
+        return results
+
+    def save(self, path) -> str:
+        """Save a complete checkpoint. Only load checkpoints you trust."""
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("wb") as handle:
+            pickle.dump(self, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        return str(destination)
+
+    @classmethod
+    def load(cls, path):
+        """Load a checkpoint previously produced by :meth:`save`."""
+        with Path(path).open("rb") as handle:
+            agent = pickle.load(handle)
+        if not isinstance(agent, cls):
+            raise TypeError(f"checkpoint contains {type(agent).__name__}, expected {cls.__name__}")
+        return agent
 
     def __init__(
         self,

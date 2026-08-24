@@ -1,11 +1,25 @@
-# Data and artifacts
+# Data and Artifacts
 
-- `results_v7/` is the default location for generated V7 benchmark outputs;
-  it is intentionally not part of the source distribution.
-- `configs/` contains experiment inputs.
-- `tests/` contains correctness and regression checks.
-- `docs/` contains protocol and interpretation guidance.
+## Source data
 
-Generated results should include the config, seed list, dependency versions,
-and timestamp. Checked-in result files are not authoritative unless their
-producing command and config are recorded.
+The default experiments generate synthetic transitions at runtime. Safety
+Gymnasium experiments use the installed external environments and do not add
+their assets to this repository.
+
+## Generated outputs
+
+Store outputs under a named directory such as `results_v7/` or
+`results_mujoco/`. A result directory should contain, where applicable:
+
+- the exact command;
+- the configuration file;
+- source revision;
+- dependency and environment versions;
+- random seed list;
+- per-seed summary data;
+- aggregate metrics and figures.
+
+The directory name alone is not metadata. A checked-in figure is not
+authoritative unless its producing command and configuration are recorded.
+Generated caches, logs, checkpoints, and local plots are ignored unless they
+are intentionally curated as research artifacts.

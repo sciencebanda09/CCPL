@@ -5,6 +5,8 @@ import sys
 import numpy as np
 import pytest
 
+from ccpl import GymnasiumCCPLEnv, SafetyPolicy, SafetyTrip
+
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
@@ -468,3 +470,84 @@ def test_generate_plots_import_has_no_execution_side_effect(tmp_path, monkeypatc
     module = importlib.import_module("generate_plots")
     importlib.reload(module)
     assert list(tmp_path.iterdir()) == []
+
+
+class _GymLikeEnv:
+    def __init__(self, five_values=True):
+        self.five_values = five_values
+        self.steps = 0
+
+    def reset(self, **kwargs):
+        self.steps = 0
+        return np.zeros(3, dtype=np.float32), {"seed": kwargs.get("seed")}
+
+    def step(self, action):
+        self.steps += 1
+        observation = np.full(3, self.steps, dtype=np.float32)
+        info = {"cost": 0.5}
+        if self.five_values:
+            return observation, 1.0, self.steps >= 2, False, info
+        return observation, 1.0, self.steps >= 2, info
+
+
+def test_gymnasium_adapter_exposes_ccpl_episode_interface():
+    env = GymnasiumCCPLEnv(_GymLikeEnv(), consequence_delay=2)
+    state = env.reset(seed=7)
+    assert state.shape == (3,)
+    _, reward, consequence, done, info = env.step(0)
+    assert (reward, consequence, done, info["cost"]) == (1.0, 0.5, False, 0.5)
+    _, _, _, done, _ = env.step(0)
+    assert done is True
+    assert env.episode_stats()["steps"] == 2
+
+
+def test_gymnasium_adapter_accepts_legacy_four_value_steps():
+    env = GymnasiumCCPLEnv(_GymLikeEnv(five_values=False))
+    env.reset()
+    _, _, consequence, done, _ = env.step(0)
+    assert consequence == 0.5
+    assert done is False
+
+
+def test_public_agent_api_can_fit_predict_and_round_trip_checkpoint(tmp_path):
+    agent = make_ccpl(
+        6, 5, seed=41, pretrain_steps=0, batch_size=2,
+        buffer_capacity=32, tau_max=1,
+    )
+    env = StandardEnv(max_steps=2, consequence_delay=1, seed=42)
+    history = agent.fit(env, episodes=1, update_freq=1)
+    assert len(history) == 1
+    assert isinstance(agent.predict(np.zeros(6, dtype=np.float32)), int)
+
+    checkpoint = tmp_path / "agent.pkl"
+    agent.save(checkpoint)
+    restored = type(agent).load(checkpoint)
+    assert restored.state_dim == agent.state_dim
+    assert restored.action_dim == agent.action_dim
+
+
+class _FixedAgent:
+    def predict(self, observation):
+        return 2
+
+
+def test_safety_policy_replaces_unsafe_action_and_audits(tmp_path):
+    audit_path = tmp_path / "safety.jsonl"
+    policy = SafetyPolicy(
+        _FixedAgent(), lambda observation, action: action != 2,
+        action_dim=3, fallback_action=0, audit_path=audit_path,
+    )
+    assert policy.predict(np.zeros(1)) == 0
+    policy.observe_consequence(0.25, done=True)
+    assert audit_path.read_text(encoding="utf-8").count("\n") == 3
+
+
+def test_safety_policy_fails_closed_on_budget_exceedance():
+    policy = SafetyPolicy(
+        _FixedAgent(), lambda observation, action: True,
+        action_dim=3, consequence_budget=1.0,
+    )
+    with pytest.raises(SafetyTrip):
+        policy.observe_consequence(1.1)
+    with pytest.raises(SafetyTrip):
+        policy.predict(np.zeros(1))

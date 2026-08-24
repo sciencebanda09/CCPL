@@ -1,11 +1,14 @@
-# Experiment entry points
+# Experiment Entry Points
 
-Use the existing runners while the package migration is staged:
+Use the existing runners from the repository root:
 
-- `python run_benchmark_v7.py --help` — primary benchmark
-- `python run_ccpl.py --help` — focused training run
-- `python generate_plots.py --help` — derived figures
-- `python -m pytest -q` — regression and numerical correctness suite
+```bash
+python run_benchmark_v7.py --help
+python run_ccpl.py --help
+python generate_plots.py --help
+python -m pytest -q
+```
 
-Do not edit generated `results_v7/` outputs by hand. Rerun the producing command and record its
-config in the result directory.
+Generated result directories are data products. Do not edit their files by
+hand; rerun the producing command and preserve the configuration and seed
+metadata.

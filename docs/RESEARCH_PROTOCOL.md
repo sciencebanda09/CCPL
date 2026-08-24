@@ -1,38 +1,55 @@
-# CCPL research protocol
+# CCPL Research Protocol
 
-## Research question
+## Research Question
 
-Can causal action attribution, explicit delay modeling, and state-conditioned
-constraint multipliers improve reward while satisfying delayed safety constraints?
+The central question is whether explicit delayed-consequence modeling and
+causal action attribution improve constrained learning relative to matched
+baselines while maintaining the specified constraint budget.
 
-## Claims and evidence
+## Evidence Requirements
 
 | Claim | Required evidence |
 | --- | --- |
-| Delayed feedback is handled correctly | alignment tests and delay diagnostics |
-| Causal attribution improves learning | ICN/SCM MAE and correlation on held-out states |
-| State-conditioned lambda is useful | paired seed-level comparison against ablations |
-| Improvements transfer | held-out adversarial and Safety Gymnasium results |
+| Delayed feedback is aligned correctly | Alignment tests and delay diagnostics |
+| Causal attribution improves learning | Held-out SCM labels and matched no-causal runs |
+| A state-conditioned multiplier is useful | Paired seed-level comparison with a scalar-multiplier ablation |
+| The method transfers | Environments held out from tuning, with versions recorded |
 
-## Experiment tiers
+An observed reward increase is not by itself evidence of a safety improvement.
+Every result must report reward and consequence metrics together.
+
+## Experiment Tiers
 
 1. `smoke`: imports, short training, and finite-value checks.
 2. `main_v7`: primary synthetic benchmark and ablations.
-3. `adversarial`: held-out stress tests; never tune on these environments.
-4. `safety`: optional external-environment evaluation with versions reported.
-5. `theory`: contraction, dominance, and causal-label diagnostics.
+3. `adversarial`: held-out stress tests; do not tune on these environments.
+4. `safety`: optional external-environment evaluation with package and task versions.
+5. `theory`: contraction, multiplier, and synthetic causal-label diagnostics.
 
-## Reproducibility checklist
+The repository includes `CPO-FO`, a first-order approximation of constrained
+policy optimization. It must not be reported as an exact conjugate-gradient
+or natural-gradient CPO implementation. See
+[`CPO_COMPARISON.md`](CPO_COMPARISON.md).
 
-- Record every random seed and the exact command.
-- Keep training and evaluation environments separate.
-- Report mean, standard deviation, and individual seed values.
-- Do not infer independent seeds from episode-level observations.
-- Save config and summary JSON beside generated results.
-- Run `python -m pytest -q` before publishing a result.
+## Required Record
 
-## Implementation boundary
+For every reported result, preserve:
 
-Reusable implementation lives in `ccpl/`. The root runners are retained
-as compatibility entry points for published reproduction commands; new code
-should import from `ccpl` after installation.
+- the exact command and configuration;
+- all random seeds and per-seed metrics;
+- Python, package, MuJoCo, and environment versions;
+- the source revision or archive hash;
+- training and evaluation episode counts;
+- definitions of reward, cost, discounting, and constraint satisfaction;
+- training failures, safety trips, and excluded runs.
+
+Means and standard deviations must be computed across independent training
+seeds. Episodes from one run are not independent experimental replicates.
+
+## Interpretation Boundary
+
+The contraction theorem is conditional on its assumptions, including the
+positive minimum delay condition. State-conditioned multipliers are not
+universally superior to scalar multipliers. External Safety Gymnasium results
+test the implementation on those tasks; they do not validate synthetic SCM
+labels or provide a deployment certification.

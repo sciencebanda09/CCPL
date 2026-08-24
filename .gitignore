@@ -4,6 +4,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.cache/
 .venv/
 venv/
 *.egg-info/
@@ -20,16 +25,33 @@ checkpoints/
 *.pth
 *.ckpt
 results/
-results_v7/
+results*/
+outputs/
+logs/
+wandb/
+mlruns/
 
 # Generated figures/logs
 *.log
-*.pdf
-*.json
-*.png
+*.jsonl
+*.tmp
+*.bak
+
+# Keep generated result directories local by default. Curated artifacts can be
+# added explicitly with `git add -f` and must include their provenance.
+results*/**/*.json
+results*/**/*.csv
+results*/**/*.pdf
+results*/**/*.png
 
 # IDE and OS files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+.ipynb_checkpoints/
+
+# Local credentials and environment configuration
+.env
+.env.*
+!.env.example
