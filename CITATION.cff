@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+title: "Causal Consequence-Penalized Learning"
+message: "If you use CCPL in academic or research work, please cite the associated paper."
+type: software
+authors:
+  - given-names: Shashank
+    family-names: Dev
+    affiliation: Independent Researcher
+year: 2026
+version: 0.7.0
+license: "Proprietary"
+repository-code: "https://github.com/sciencebanda09/ccpl"

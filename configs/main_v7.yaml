@@ -1,0 +1,10 @@
+# Main synthetic benchmark configuration. Changes define a new experiment version.
+name: main_v7
+episodes: 1000
+evaluation_episodes: 100
+seeds: [0, 1, 2]
+environments: [standard, noisy, shifted, randomised]
+agents: [CCPL, DQN, PPO, A2C, CPO, RCPO, PID-Lagrangian, SAC-Lagrangian]
+ablation: true
+safety: false
+consequence_delay: 2

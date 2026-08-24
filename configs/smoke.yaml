@@ -1,0 +1,9 @@
+# Fast end-to-end validation; not a paper result.
+name: smoke
+episodes: 5
+evaluation_episodes: 3
+seeds: [0]
+environments: [standard]
+agents: [CCPL, PPO]
+ablation: false
+safety: false

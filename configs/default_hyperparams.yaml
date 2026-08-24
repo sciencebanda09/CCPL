@@ -1,0 +1,13 @@
+# Canonical defaults for the reproducible CCPL baseline.
+algorithm: CCPL
+seed: 42
+gamma: 0.99
+tau_max: 4
+history_len: 8
+batch_size: 32
+buffer_capacity: 60000
+gru_dim: 40
+hidden_dim: 128
+pretrain_steps: 600
+lambda_warmup: 100
+penalty_scale: 2.0

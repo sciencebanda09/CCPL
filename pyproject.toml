@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ccpl"
+version = "0.7.0"
+description = "Causal Consequence-Penalized Learning for delayed constrained reinforcement learning"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10", "matplotlib>=3.7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+safety = ["gymnasium>=0.26", "safety-gymnasium>=0.3", "mujoco>=2.3"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.setuptools]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ccpl*"]

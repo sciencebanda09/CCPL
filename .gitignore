@@ -1,0 +1,33 @@
+# Python caches and local tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Experiment outputs and large local data
+data/
+datasets/
+checkpoints/
+*.npz
+*.npy
+*.pt
+*.pth
+*.ckpt
+results/
+results_v7/
+
+# Generated figures/logs
+*.log
+*.pdf
+*.json
+*.png
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
