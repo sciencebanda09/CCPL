@@ -55,7 +55,23 @@ python -m pip install -e ".[dev,safety]"
 
 ## Quick start
 
-Run the documented smoke configuration:
+Install the package and use the public API from another project:
+
+```bash
+python -m pip install ccpl-rl
+```
+
+```python
+from ccpl import make_ccpl, make_env, run_episode
+
+agent = make_ccpl(state_dim=6, action_dim=5, seed=42)
+env = make_env("standard", seed=42)
+result = run_episode(agent, env, train=False)
+print(result)
+```
+
+The distribution name on PyPI is `ccpl-rl`; the Python import namespace remains
+`ccpl`. Run the repository smoke configuration separately:
 
 ```bash
 python run_ccpl.py theory

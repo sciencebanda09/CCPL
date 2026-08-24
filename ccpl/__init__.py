@@ -1,7 +1,19 @@
-"""CCPL research implementation package.
+"""Public CCPL reinforcement-learning API.
 
-The modules retain their historical names for compatibility with the original
-reproduction scripts; new code should import them through this package path.
+The lower-level modules remain available for research extensions, but typical
+users can import the agent and environment factories directly from ``ccpl``.
 """
 
+from .algorithms.ccpl_agent import CCPLAgent, make_ccpl, make_ccpl_base, run_episode
+from .environments.environments import ENV_REGISTRY, make_env
+
 __version__ = "0.7.0"
+
+__all__ = [
+    "CCPLAgent",
+    "ENV_REGISTRY",
+    "make_ccpl",
+    "make_ccpl_base",
+    "make_env",
+    "run_episode",
+]

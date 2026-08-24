@@ -7,6 +7,8 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+build/
+dist/
 
 # Experiment outputs and large local data
 data/
