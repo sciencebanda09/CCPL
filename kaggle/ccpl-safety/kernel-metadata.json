@@ -1,0 +1,10 @@
+{
+  "id": "dmechatronicx/ccpl-safety",
+  "title": "CCPL Safety Gymnasium experiments",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true
+}
