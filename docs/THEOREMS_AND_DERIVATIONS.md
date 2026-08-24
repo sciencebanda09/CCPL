@@ -179,7 +179,8 @@ contrast is
 
 $$
 \Delta C(s,a,u)
-  =C^{\mathrm{do}(a)}(s,u)-C^{\mathrm{do}(a_0)}(s,u).
+  =C^{\operatorname{do}(a)}(s,u)
+   -C^{\operatorname{do}(a_0)}(s,u).
 $$
 
 The synthetic structural causal model supplies labels for this quantity. The
@@ -192,14 +193,16 @@ $$
 With valid interventional labels, the supervised objective has the form
 
 $$
+\begin{aligned}
 \mathcal{L}_{\mathrm{ICN}}(\psi)
-  =
-\frac{1}{\sum_i w_i}
-\sum_{i=1}^{B}
-w_i\left(
-\widehat{\Delta C}_\psi(s_i,a_i,h_i)
--\Delta C_i
-\right)^2,
+  &=
+  \frac{1}{\sum_{i=1}^{B} w_i}
+  \sum_{i=1}^{B}
+  w_i
+  \left(
+    \widehat{\Delta C}_\psi(s_i,a_i,h_i)-\Delta C_i
+  \right)^2.
+\end{aligned}
 $$
 
 where $w_i\geq 0$ are replay or confidence weights. Samples without a valid
@@ -286,16 +289,18 @@ $$
 For an entropy-regularized discrete policy, the objective has the form
 
 $$
+\begin{aligned}
 \mathcal{J}_{\pi}
-  =
-\mathbb{E}_{s}\left[
-\sum_a\pi_\theta(a\mid s)
-\left(
-\alpha\log\pi_\theta(a\mid s)
--Q_r(s,a)
-+\lambda_\phi(s)Q_c(s,a)
-\right)
-\right].
+  &=
+  \mathbb{E}_{s}\left[
+    \sum_a \pi_\theta(a\mid s)
+    \left(
+      \alpha\log\pi_\theta(a\mid s)
+      -Q_r(s,a)
+      +\lambda_\phi(s)Q_c(s,a)
+    \right)
+  \right].
+\end{aligned}
 $$
 
 The implementation uses bounded numerical updates for $\lambda_\phi$. A
