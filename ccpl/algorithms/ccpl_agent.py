@@ -286,6 +286,9 @@ class CCPLAgent:
         self.last_delay_loss      = 0.0
         self.last_mean_delta_C    = 0.0
         self.last_mean_lambda     = 0.0
+        self.last_lambda_target   = 0.0
+        self.last_lambda_signal   = 0.0
+        self.last_jc_violation    = 0.0
         self.last_qc_loss         = 0.0
         self.last_jc              = 0.0
         self._last_sigma          = np.zeros(1, np.float32)
@@ -803,6 +806,9 @@ class CCPLAgent:
         lam_target = np.clip(
             0.6 * global_target + 0.3 * local_target + 0.1 * freq_target,
             0.0, 1.0)
+        self.last_lambda_target = float(np.mean(lam_target))
+        self.last_lambda_signal = float(jc_violation)
+        self.last_jc_violation = float(jc_violation)
         lam_errors = lam_raw / self.lambda_max - lam_target
         local_dev = np.abs(delta_C_clipped - delta_C_clipped.mean())
         risk_w = np.clip(
@@ -838,6 +844,8 @@ class CCPLAgent:
             "lambda_scale":     round(self.lambda_scale, 4),
             "hit_freq_ema":     round(self._hit_freq_ema, 4),
             "mean_lambda":      round(self.last_mean_lambda, 4),
+            "lambda_target":    round(self.last_lambda_target, 4),
+            "jc_violation":     round(self.last_jc_violation, 4),
             "gamma_eff":        round(self.last_gamma_eff, 4),
             "expected_delay":    round(
                 float(self.delay_dist.expected_tau(self._h)), 4),
@@ -1140,6 +1148,9 @@ def build_ccpl_ablation(state_dim: int, action_dim: int,
         mag_t = np.clip(_sig2(np.ones(B) * lam_signal * 2.0) * np.ones(B, np.float32), 0.0, 1.0)
         freq_t = np.clip(np.full(B, self._hit_freq_ema, np.float32), 0, 1)
         lam_tgt = 0.7 * mag_t + 0.3 * freq_t
+        self.last_lambda_target = float(np.mean(lam_tgt))
+        self.last_lambda_signal = float(lam_signal)
+        self.last_jc_violation = float(jc_v)
         raw_lam = self.lambda_net.forward(S)
         lam_err = raw_lam / self.lambda_max - lam_tgt
         self.lambda_net.backward_update(S, lam_err * W, weight_decay=1e-4)

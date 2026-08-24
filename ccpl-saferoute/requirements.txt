@@ -1,0 +1,4 @@
+ccpl-rl>=0.7.1
+gradio>=4.0
+matplotlib>=3.7
+numpy>=1.24
