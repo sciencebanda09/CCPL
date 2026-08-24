@@ -148,6 +148,9 @@ run_benchmark_v7.py   Primary synthetic benchmark runner
 
 ## Reproducibility
 
+The full theorem statements and derivations are in
+[docs/THEOREMS_AND_DERIVATIONS.md](docs/THEOREMS_AND_DERIVATIONS.md).
+
 Read [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md), [`DATA_SPEC.md`](DATA_SPEC.md),
 [`docs/RESEARCH_PROTOCOL.md`](docs/RESEARCH_PROTOCOL.md), and
 [`docs/DATA_AND_ARTIFACTS.md`](docs/DATA_AND_ARTIFACTS.md). Every reported
