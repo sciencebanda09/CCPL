@@ -5,6 +5,10 @@ in CCPL. It separates proved statements from assumptions, diagnostics, and
 empirical hypotheses. It must be read together with
 [MATHEMATICAL_SPEC.md](MATHEMATICAL_SPEC.md) and the paper.
 
+All displayed equations use GitHub's supported double-dollar math blocks and
+all inline expressions use single-dollar math delimiters. View this file on
+the rendered GitHub page rather than the raw-file view.
+
 ## 1. Setting and notation
 
 Let
@@ -32,7 +36,7 @@ For a budget $d$, the constrained objective is
 
 $$
 \max_{\pi} J_r(\pi)
-\quad\text{subject to}\quad
+\quad\mathrm{subject\ to}\quad
 J_c(\pi)\leq d.
 $$
 
@@ -99,8 +103,8 @@ Assume there is a uniform $\tau_{\min}\geq 1$ such that
 
 $$
 p_k(h)=0
-\quad\text{for all }k<\tau_{\min}
-\quad\text{and all admissible }h.
+\quad\mathrm{for\ all}\ k<\tau_{\min}
+\quad\mathrm{and\ all\ admissible}\ h.
 $$
 
 Then
