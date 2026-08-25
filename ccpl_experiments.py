@@ -97,6 +97,15 @@ def _save(data, name, out_dir):
     return path
 
 
+def _seed_values(args):
+    if args.seed_values:
+        values = [int(value.strip()) for value in args.seed_values.split(",") if value.strip()]
+        if len(values) != args.seeds:
+            raise ValueError("--seed-values must contain exactly --seeds comma-separated integers")
+        return values
+    return [args.seed + index * 100 for index in range(args.seeds)]
+
+
 def _build_all_baselines(seed):
     """Build all 9 comparison agents."""
     return {
@@ -122,8 +131,7 @@ def run_E1(args):
     all_results = {}
     all_histories = {}
 
-    for seed_i in range(args.seeds):
-        seed = args.seed + seed_i * 100
+    for seed_i, seed in enumerate(_seed_values(args)):
         _sep(f"  Seed {seed_i+1}/{args.seeds}  (seed={seed})")
         agents = _build_all_baselines(seed)
 
@@ -179,7 +187,7 @@ def run_E1(args):
               f"r={test['r']:.3f}  Holm={'yes' if is_significant else 'no'}")
 
     _save({"results": averaged, "seed_results": all_results,
-           "seed_values": [args.seed + i * 100 for i in range(args.seeds)],
+           "seed_values": _seed_values(args),
            "transfer": xfer}, "E1_results", out)
 
     flat_histories = {name: hlist[-1] for name, hlist in all_histories.items()}
@@ -203,8 +211,7 @@ def run_E2(args):
     eval_envs   = list(EVAL_ENVS) + ["adversarial", "deceptive_reward"]
     all_results = {}
 
-    for seed_i in range(args.seeds):
-        seed = args.seed + seed_i * 100
+    for seed_i, seed in enumerate(_seed_values(args)):
         print(f"\n  Seed {seed_i+1}/{args.seeds}")
         variants = build_ccpl_ablation(STATE_DIM, ACTION_DIM, seed=seed)
 
@@ -250,7 +257,7 @@ def run_E2(args):
         print(f"  {name:<20}  {dr:>+10.3f}  {dc:>+10.4f}  {dcsr:>+7.1f}%")
 
     _save({"results": averaged, "seed_results": all_results,
-           "seed_values": [args.seed + i * 100 for i in range(args.seeds)],
+           "seed_values": _seed_values(args),
            "transfer": xfer}, "E2_ablation", out)
 
     plot_ablation_comparison(averaged, eval_envs, out)
@@ -697,8 +704,7 @@ def run_E8(args):
 
     all_results = {}
 
-    for seed_i in range(args.seeds):
-        seed = args.seed + seed_i * 100
+    for seed_i, seed in enumerate(_seed_values(args)):
         _sep(f"  Seed {seed_i+1}/{args.seeds}  (seed={seed})")
 
         task_results = {}
@@ -926,8 +932,7 @@ def run_E9(args):
             probe_env.close()
         print(f"  state_dim={sg_state_dim}  action_dim={sg_action_dim}")
 
-        for seed_i in range(args.seeds):
-            seed = args.seed + seed_i * 100
+        for seed_i, seed in enumerate(_seed_values(args)):
             print(f"\n  Seed {seed_i+1}/{args.seeds}")
 
             ablation_agents = build_ccpl_ablation(sg_state_dim, sg_action_dim, seed=seed)
@@ -1074,6 +1079,22 @@ class _SCMQualityLabels:
             labels["delta_C_scm"] = labels["delta_C_all"][:, (np.asarray(actions) + 1) % n_actions]
         return labels
 
+    def icn_calibration_error(self, states, actions, icn_delta_C):
+        """Expose the agent label-generator calibration contract for E10 modes."""
+        labels = self.generate_batch(states, actions)
+        scm_delta = labels["delta_C_scm"]
+        mae = float(np.abs(np.asarray(icn_delta_C) - scm_delta).mean())
+        if (len(icn_delta_C) > 1 and np.std(icn_delta_C) > 1e-12
+                and np.std(scm_delta) > 1e-12):
+            correlation = float(np.corrcoef(icn_delta_C, scm_delta)[0, 1])
+        else:
+            correlation = 0.0
+        return {
+            "mae": round(mae, 5),
+            "correlation": round(correlation, 4),
+            "well_calibrated": mae < 0.05 and correlation > 0.7,
+        }
+
 
 def _multi_action_diagnostic(agent, seed, n_sequences=128, horizon=3):
     rng = np.random.default_rng(seed)
@@ -1101,8 +1122,7 @@ def run_E10(args):
     os.makedirs(out, exist_ok=True)
     modes = ("oracle_scm", "noisy_scm", "misspecified_scm", "observational_only")
     all_results = []
-    for seed_i in range(args.seeds):
-        seed = args.seed + seed_i * 100
+    for seed_i, seed in enumerate(_seed_values(args)):
         seed_results = {"seed": seed, "modes": {}}
         for mode in modes:
             agent = make_ccpl(STATE_DIM, ACTION_DIM, seed=seed,
@@ -1155,6 +1175,8 @@ def main(argv=None):
     p.add_argument("--delay",         type=int, default=5)
     p.add_argument("--seeds",         type=int, default=5)
     p.add_argument("--seed",          type=int, default=42)
+    p.add_argument("--seed-values",   type=str, default="",
+                   help="Explicit comma-separated seeds; must match --seeds")
     p.add_argument("--out",           type=str, default="results/experiments")
     p.add_argument("--verbose",       action="store_true")
     p.add_argument("--quick",         action="store_true",
