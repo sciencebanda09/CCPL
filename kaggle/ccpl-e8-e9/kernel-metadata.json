@@ -1,0 +1,10 @@
+{
+  "id": "dmechatronicx/ccpl-e8-e9",
+  "title": "CCPL E8 E9",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": false,
+  "enable_gpu": false,
+  "enable_internet": true
+}
