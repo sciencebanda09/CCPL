@@ -46,6 +46,17 @@ method discovers causality from observational data, that state-conditioned
 penalties universally dominate scalar penalties, or that a bounded multiplier
 proves convergence of the full nonlinear algorithm.
 
+\paragraph{Contributions.}
+The paper makes three scoped contributions. First, it gives a delay-aware
+consequence penalty and proves the contraction of the corresponding tabular
+one-step update under fixed kernels. Second, it defines an action-level
+interventional contrast and uses it to train the consequence penalty when a
+simulator SCM can provide labels. Third, it combines this penalty with a
+state-conditioned dual and separate reward and consequence critics, then
+tests the components with a matched synthetic ablation. The implementation,
+protocol, and visual case study are released so that these claims can be
+checked independently.
+
 \section{Problem formulation}
 For policy $\pi$, reward $r_t$, non-negative consequence $c_t$, discount
 $\gamma\in(0,1)$, horizon $T$, and budget $d$, define
@@ -182,12 +193,57 @@ targets. Bounded multiplier updates are a numerical invariant, not a
 convergence proof.
 
 \section{Experiments}
-We use two evidence sources. Figure~\ref{fig:benchmark} is the supplied
-archived synthetic benchmark and ablation snapshot. It reports six
-environments and three seeds. The full system has reward $+4.840$,
-$J_c=0.120$, and CSR $100\%$ in that snapshot; CCPL-Base has reward $+0.733$,
-$J_c=3.644$, and CSR $67.3\%$. These values are not merged with later runs
-using different configurations.
+The archived benchmark contains six synthetic environments and three seeds.
+The values below are transcribed from the supplied result snapshot and are
+reported as an artifact of that run; they are not merged with later runs that
+used different configurations. CSR is the fraction of evaluation episodes
+whose consequence return satisfies the configured budget.
+
+\begin{table}[t]
+\caption{Archived benchmark snapshot.}
+\label{tab:benchmark}
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+Method & Reward & $J_c$ & CSR (\%)\\
+\midrule
+CCPL & 4.840 & 0.120 & 100.0\\
+PPO & -0.105 & 0.909 & 95.5\\
+A2C & 1.989 & 0.913 & 95.5\\
+DQN & 2.515 & 0.537 & 100.0\\
+CPO & -0.031 & 0.610 & 99.6\\
+RCPO & -0.033 & 0.612 & 99.6\\
+PID-Lag & -0.040 & 0.610 & 99.6\\
+SAC-Lag & 0.430 & 2.670 & 93.4\\
+CCPL-Base & 0.733 & 3.644 & 67.3\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:ablation} removes one design direction at a time. The result
+does not imply that every direction improves every metric: for example,
+CCPL-NoCausal has higher reward in this snapshot, while the full system has
+lower consequence return than all listed variants except the base system.
+
+\begin{table}[t]
+\caption{Archived component ablation.}
+\label{tab:ablation}
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+Variant & Reward & $J_c$ & CSR (\%)\\
+\midrule
+CCPL & 4.840 & 0.120 & 100.0\\
+NoDelay & 2.062 & 0.666 & 99.9\\
+NoState$\lambda$ & 3.471 & 0.284 & 98.1\\
+NoCausal & -1.105 & 0.538 & 100.0\\
+SingleQ & 3.218 & 0.391 & 96.7\\
+CCPL-Base & 0.733 & 3.644 & 67.3\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 SafeRoute is a stochastic grid-navigation case study with delayed cost
 emission. Its state is the 12-dimensional vector containing normalized agent
@@ -209,20 +265,11 @@ make new numerical SafeRoute claims here.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{figures/archived_benchmark.png}
-\caption{Archived synthetic benchmark and ablation snapshot. The values are
-reported only for the displayed experiment and are not combined with later
-protocols.}
-\label{fig:benchmark}
-\end{figure}
-
-\begin{figure}[t]
-\centering
 \begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{figures/02_risk_heatmap.png}
+\includegraphics[width=\linewidth]{figures/01_topdown.png}
 \end{minipage}
 \begin{minipage}{0.32\linewidth}\centering
-\includegraphics[width=\linewidth]{figures/03_delayed_timeline.png}
+\includegraphics[width=\linewidth]{figures/04_policy_comparison.png}
 \end{minipage}
 \begin{minipage}{0.32\linewidth}\centering
 \includegraphics[width=\linewidth]{figures/07_rotating_3d.png}
