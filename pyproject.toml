@@ -15,6 +15,9 @@ Homepage = "https://github.com/sciencebanda09/ccpl"
 Repository = "https://github.com/sciencebanda09/ccpl"
 Issues = "https://github.com/sciencebanda09/ccpl/issues"
 
+[project.scripts]
+ccpl-audit-logged-data = "ccpl.real_delay:audit_main"
+
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
 safety = ["gymnasium>=0.26", "safety-gymnasium>=0.3", "mujoco>=2.3"]

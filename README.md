@@ -98,6 +98,25 @@ trusted sources.
 action, a consequence budget, and JSONL audit logging. This is a runtime
 control and audit mechanism; it is not a safety certificate.
 
+## Logged delayed-consequence data
+
+For real logged trajectories, CCPL provides a strict JSONL contract and an
+audit utility. Each record contains an episode identifier, contiguous timestep,
+state vector, action, reward, consequence, timestamp, and terminal flag. Delay
+and source-action fields are optional because many observational logs do not
+identify causal responsibility. Causal labels must only be included when they
+come from a justified intervention or validated causal model.
+
+```bash
+python scripts/audit_logged_dataset.py data/trajectories.jsonl \
+  --output results/real_delay_audit.json
+```
+
+See [`docs/REAL_DELAY_PROTOCOL.md`](docs/REAL_DELAY_PROTOCOL.md) for the
+schema, validation rules, and the staged offline evaluation protocol. The
+validator prepares real-data experiments; it does not by itself establish
+causal identification or safe deployment.
+
 ## Mathematical specification
 
 Let $p(\tau\mid h)$ be a delay distribution over
@@ -179,7 +198,7 @@ dependency versions, environment name, and individual seed values.
 python -m pytest -q
 ```
 
-The last verified run contains **42 passed, 0 failed, and 0 skipped** tests.
+The last verified run contains **44 passed, 0 failed, and 0 skipped** tests.
 
 ## Citation
 
