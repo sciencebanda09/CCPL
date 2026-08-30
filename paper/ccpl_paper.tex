@@ -1,6 +1,8 @@
 \documentclass[10pt]{article}
 \usepackage{iclr2027_conference,times}
-\usepackage{amsmath,amssymb,booktabs,graphicx,enumitem,multirow}
+\usepackage{amsmath,amssymb,amsthm,booktabs,graphicx,enumitem,multirow}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit}
 \usepackage{microtype}
 \usepackage{url}
 
@@ -10,6 +12,8 @@
 \newcommand{\CCPL}{\textsc{CCPL}}
 \newcommand{\ICN}{\textsc{ICN}}
 \newcommand{\E}{\mathbb{E}}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
 
 \begin{document}
 \maketitle
@@ -73,7 +77,9 @@ The contributions are: an explicit delayed-consequence pipeline with replay
 alignment; an action-centred, SCM-supervised ICN with uncertainty estimation;
 a dual-critic and adaptive safety-selection design; and an implementation-level
 evaluation protocol with component ablations, attribution diagnostics, and a
-visual delayed-cost case study.
+visual delayed-cost case study. The code also exposes the supervision masks,
+source-action indices, uncertainty margins, and diagnostic logs needed to
+audit these mechanisms rather than treating them as an opaque policy network.
 
 \section{Background and Related Work}
 CMDPs define a reward objective together with a constraint budget
@@ -133,6 +139,61 @@ This quantity is a delay weight, not an estimate of causal responsibility by
 itself. Responsibility comes from the aligned replay label or SCM contrast.
 
 \section{CCPL Method}
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=5mm and 8mm,
+  box/.style={draw, rounded corners=1pt, align=center, minimum height=8mm,
+              text width=25mm, font=\small},
+  line/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (env) {environment\\$s_t,a_t,r_t,c_t$};
+\node[box, right=of env] (replay) {causal replay\\history + alignment};
+\node[box, above right=of replay] (delay) {delay model\\$P(\tau\mid h_t)$};
+\node[box, below right=of replay] (icn) {ICN\\$\widehat{\Delta C},\sigma$};
+\node[box, right=30mm of replay] (critics) {separate critics\\$Q_r,Q_c$};
+\node[box, right=of critics] (policy) {safety selection\\$\lambda(s)$ + gate};
+\draw[line] (env) -- (replay);
+\draw[line] (replay) -- (delay);
+\draw[line] (replay) -- (icn);
+\draw[line] (delay) -- (critics);
+\draw[line] (icn) -- (critics);
+\draw[line] (critics) -- (policy);
+\draw[line] (policy) |- (env);
+\node[draw,dashed,fit=(delay)(icn),inner sep=3mm,label={[font=\scriptsize]above:consequence attribution}] {};
+\end{tikzpicture}
+\caption{Implementation-level CCPL data flow. Delayed feedback is retained
+in replay, aligned when a source delay is available, and used by the delay
+model, ICN, critics, and safety-selection gate.}
+\label{fig:architecture}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=7mm and 9mm,
+  smallbox/.style={draw, rounded corners=1pt, align=center, minimum height=9mm,
+                  text width=24mm, font=\small},
+  line/.style={-{Latex[length=2mm]}, thick}
+]
+\node[smallbox] (input) {state $s_t$\\action $a_t$\\history $h_t$};
+\node[smallbox, right=of input, yshift=8mm] (total) {total head\\$f_{\mathrm{total}}(s,a,h)$};
+\node[smallbox, right=of input, yshift=-8mm] (base) {baseline head\\$f_{\mathrm{base}}(s,h)$};
+\node[smallbox, right=of total, yshift=-8mm] (contrast) {marginal contrast\\$\widehat{\Delta C}=f_{\mathrm{total}}-f_{\mathrm{base}}$};
+\node[smallbox, right=of contrast] (gate) {uncertainty\\and OOD gate};
+\draw[line] (input) -- (total);
+\draw[line] (input) -- (base);
+\draw[line] (total) -- (contrast);
+\draw[line] (base) -- (contrast);
+\draw[line] (contrast) -- (gate);
+\end{tikzpicture}
+\caption{ICN factorization used in the implementation. The baseline retains
+the state and history but omits the current action; this is an action-marginal
+baseline, not a state-free baseline. The difference is trained only where a
+valid SCM or aligned consequence label exists.}
+\label{fig:icn}
+\end{figure}
+
 \subsection{Replay alignment and delay learning}
 During interaction, the agent stores $(s_t,a_t,r_t,c_t,s_{t+1})$, hidden
 states, and the finite causal history. When the environment exposes
@@ -155,6 +216,7 @@ claim that the prior is correct.
 The reward critic keeps the ordinary one-step target:
 \begin{equation}
 y^r_t=r_t+\gamma(1-d_t)Q_r^-(s_{t+1},a_{t+1}).
+\label{eq:reward-target}
 \end{equation}
 The consequence critic uses the positive clipped attributed consequence:
 \begin{equation}
@@ -215,6 +277,69 @@ Both penalty terms are clipped. The implementation gradually shifts from the
 direct ICN penalty toward the learned consequence critic as updates accumulate.
 The HallucinationGate adds bounded uncertainty and OOD margins and records
 calibration statistics for later audit.
+
+\section{Formal Analysis}
+The following result is intentionally about the fixed-kernel tabular map
+represented by Equation~\eqref{eq:qc}. It does not analyze the nonlinear
+optimizer, the learned history encoder, or online SCM calibration.
+
+\begin{theorem}[Fixed-kernel contraction of the consequence critic]
+Let $P$, $p(\tau\mid h)$, and $\Delta C$ be fixed. Assume bounded
+$\Delta C$ and $0<\gamma<1$. Define
+\begin{equation}
+(\mathcal{T}_cQ)(s,a)=\bar\gamma(h)[\Delta C(s,a,h)]_+
+ +\gamma\E_{s'\sim P(\cdot\mid s,a)}[\max_b Q(s',b)].
+\label{eq:tabular_operator}
+\end{equation}
+Then $\mathcal{T}_c$ is a contraction on bounded action-value functions under
+the sup norm, with modulus at most $\gamma$.
+\end{theorem}
+
+\begin{proof}
+For any $Q_1,Q_2$, the consequence terms in
+Equation~\eqref{eq:tabular_operator} are identical and cancel. For every
+next state $s'$,
+\begin{equation}
+\left|\max_bQ_1(s',b)-\max_bQ_2(s',b)\right|
+\le \max_b|Q_1(s',b)-Q_2(s',b)|
+\le \|Q_1-Q_2\|_\infty.
+\end{equation}
+Taking the expectation under the probability kernel $P$ and multiplying by
+$\gamma$ gives
+\begin{align}
+\left|(\mathcal{T}_cQ_1)(s,a)-(\mathcal{T}_cQ_2)(s,a)\right|
+&\le \gamma\|Q_1-Q_2\|_\infty.
+\end{align}
+Taking the supremum over $(s,a)$ proves the result. Since the space of
+bounded functions with the sup norm is complete, the fixed-kernel map has a
+unique fixed point and repeated exact application of this map converges to it.
+The conclusion applies to the fixed-kernel tabular map only; it does not
+establish convergence of the learned neural update or correctness of the
+learned delay distribution.
+\end{proof}
+
+The reward critic in the implementation uses the ordinary one-step target in
+Equation~\eqref{eq:reward-target}; the delay weight enters the consequence
+signal in Equation~\eqref{eq:qc}. Thus the theorem is a contraction result for
+the actual fixed-kernel consequence-critic target, not a claim that a learned
+delay model recovers the true delayed return.
+
+\begin{proposition}[Bounds on the learned delay weight]
+If $p(k\mid h)$ is a probability distribution on $\{0,\ldots,K\}$, then
+$\gamma^K\le\bar\gamma(h)\le1$. If there is a uniform positive minimum
+delay $k_{\min}\ge1$, then $\bar\gamma(h)\le\gamma^{k_{\min}}<1$.
+\end{proposition}
+
+\begin{proof}
+The values $\gamma^k$ lie in $[\gamma^K,1]$ and
+$\bar\gamma(h)$ is their convex combination. Under the support restriction,
+every nonzero term is at most $\gamma^{k_{\min}}$.
+\end{proof}
+
+The proposition is a bound on the weighting signal. It does not imply that
+an arbitrary unknown delay process satisfies a positive-minimum-delay
+assumption, and the contraction theorem uses the ordinary one-step modulus
+$\gamma$ because that is what the implementation bootstraps.
 
 \subsection{Training procedure}
 Each episode resets the policy and causal histories, observes transitions, and
