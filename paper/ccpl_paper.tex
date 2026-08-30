@@ -77,27 +77,73 @@ Since $0<\gamma<1$, $\gamma^\tau$ is decreasing in $\tau$. Equation
 $[\gamma^K,1]$, proving the first bound. Under the support restriction every
 nonzero term is at most $\gamma^{\tau_{\min}}$, proving the second bound.\hfill$\square$
 
-\paragraph{Theorem 1 (conditional contraction).}
-Let $\mathcal{T}_c$ be a Bellman operator with a continuation factor
-$\bar\gamma(h)$, fixed transition and delay kernels, and bounded immediate
-consequences. Under the positive-minimum-delay assumption,
+\paragraph{Theorem 1 (contraction of the implemented tabular update).}
+For fixed $P$, $p(\tau\mid h)$, $\lambda$, and attributed consequence
+$\Delta C$, define the tabular update represented by the implementation as
 \begin{equation}
-\|\mathcal{T}_cQ-\mathcal{T}_cQ'\|_\infty
-\le\gamma^{\tau_{\min}}\|Q-Q'\|_\infty.
+(\mathcal{T} Q)(s,a)=r(s,a)-\lambda(s)\bar\gamma(h)
+[\Delta C(s,a,h)]_+
+ +\gamma\E_{s'\sim P(\cdot\mid s,a)}\left[\max_b Q(s',b)\right],
+\label{eq:operator}
 \end{equation}
-Therefore $\mathcal{T}_c$ has a unique fixed point.
+where $[x]_+=\max(x,0)$ and $\bar\gamma$ is defined in
+Equation~\eqref{eq:discount}. If $r$, $\lambda$, and $\Delta C$ are bounded,
+then
+\begin{equation}
+\|\mathcal{T}Q-\mathcal{T}Q'\|_\infty
+\le\gamma\|Q-Q'\|_\infty.
+\end{equation}
+Therefore $\mathcal{T}$ has a unique fixed point.
 
 \paragraph{Proof.}
-The immediate consequence terms cancel in the difference. A probability
-transition kernel is non-expansive in the sup norm, and Proposition 1 bounds
-the continuation factor by $\gamma^{\tau_{\min}}<1$. Taking the supremum gives
-the displayed inequality. The fixed-point statement follows from the Banach
-fixed-point theorem.\hfill$\square$
+The reward and penalty terms cancel when comparing $\mathcal{T}Q$ and
+$\mathcal{T}Q'$. The max operator is 1-Lipschitz in the sup norm, and a
+probability kernel is non-expansive. Therefore
+\begin{align*}
+\left|(\mathcal{T}Q)-(\mathcal{T}Q')\right|
+&\le \gamma\E_{s'\sim P}\left[
+\left|\max_bQ(s',b)-\max_bQ'(s',b)\right|\right]\\
+&\le \gamma\|Q-Q'\|_\infty.
+\end{align*}
+Taking the supremum proves the bound, and Banach's theorem gives a unique
+fixed point.\hfill$\square$
 
-This theorem does not apply to arbitrary unknown stochastic delays. In
-particular, positive probability on zero delay can make the available bound
-equal to one. The theorem also does not establish convergence under arbitrary
-function approximation or changing delay kernels.
+This theorem is deliberately narrower than a contraction theorem for a
+multi-step delayed Bellman backup: the code uses $\bar\gamma$ in the
+attributed penalty while retaining the ordinary reward bootstrap $\gamma$.
+It does not establish convergence under arbitrary function approximation,
+changing kernels, or online SCM estimation. The positive-minimum-delay
+condition matters for the separate bound in Proposition~1; it is not needed
+for the one-step modulus in this theorem because $\gamma<1$.
+
+\subsection{Delayed observations and the Markov property}
+The delayed-cost formulation does not reject the Markov assumption for the
+physical dynamics. Let $x_t$ be the physical state and let $z_t$ contain
+pending consequence events. A general delayed-observation model can be written
+as
+\begin{align}
+x_{t+1} &\sim P(\cdot\mid x_t,a_t),\\
+z_{t+1} &=F(z_t,x_t,a_t,\xi_t),\\
+c_t &=G(z_t,\eta_t),
+\end{align}
+where $\xi_t$ and $\eta_t$ are exogenous disturbances. The augmented state
+$(x_t,z_t)$ is Markov when the pipeline state is observed. If it is hidden, a
+history representation $h_t$ is used as a proxy for the relevant information,
+as in history-based decision making for partially observable systems
+\citep{kaelbling1998}.
+The failure addressed by CCPL is the shortcut that pairs the emitted $c_t$ with
+the most recent action, not a violation of Markov dynamics. A history encoder
+does not by itself prove that the hidden pipeline has been recovered.
+
+\subsection{Related work and scope}
+CMDPs provide the constrained objective used here, while CPO provides a
+trust-region approach to policy optimization under constraints
+\citep{altman1999,achiam2017}. CCPL studies a different source of error: the
+temporal and causal interpretation of an observed consequence. The SCM
+notation follows the intervention framework of Pearl~\citep{pearl2009}; the
+present work uses a specified simulator SCM to generate labels rather than
+learning an SCM from observational data. The comparison is therefore about
+training under delayed consequences, not general causal discovery.
 
 \subsection{Interventional attribution}
 For reference action $a_0$, define the simulator-SCM contrast
@@ -144,10 +190,22 @@ $J_c=3.644$, and CSR $67.3\%$. These values are not merged with later runs
 using different configurations.
 
 SafeRoute is a stochastic grid-navigation case study with delayed cost
-emission. Figure~\ref{fig:saferoute} shows the risk surface, delayed timeline,
-and three-dimensional visualization. Because the matching multi-seed summary
-was not preserved alongside the figures, we do not make new numerical
-SafeRoute claims here.
+emission. Its state is the 12-dimensional vector containing normalized agent
+and goal coordinates, remaining horizon, current and adjacent hazard flags,
+normalized Manhattan distance, and the most recently queued cost. The action
+set is $\{\text{up},\text{down},\text{left},\text{right},\text{wait}\}$.
+For a candidate cell $q_t$, the immediate cost is
+\begin{equation}
+\tilde c_t=\mathbf{1}\{q_t\text{ is hazardous}\}
+ +0.15\,\mathbf{1}\{q_t\text{ is outside the grid}\}.
+\end{equation}
+For delay $d>0$, the environment emits the cost queued $d$ steps earlier and
+appends $\tilde c_t$ to the queue; queued costs are flushed at termination.
+The route reward is progress-shaped with a terminal goal bonus, and the
+configured episode budget is $3$. Figure~\ref{fig:saferoute} shows the risk
+surface, delayed timeline, and three-dimensional visualization. Because the
+matching multi-seed summary was not preserved alongside the figures, we do not
+make new numerical SafeRoute claims here.
 
 \begin{figure}[t]
 \centering
