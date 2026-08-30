@@ -144,6 +144,7 @@ itself. Responsibility comes from the aligned replay label or SCM contrast.
 \section{CCPL Method}
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
   node distance=5mm and 8mm,
   box/.style={draw, rounded corners=1pt, align=center, minimum height=8mm,
@@ -162,9 +163,10 @@ itself. Responsibility comes from the aligned replay label or SCM contrast.
 \draw[line] (delay) -- (critics);
 \draw[line] (icn) -- (critics);
 \draw[line] (critics) -- (policy);
-\draw[line] (policy) |- (env);
+\draw[line] (policy.south) to[out=-90,in=-90,looseness=1.35] (env.south);
 \node[draw,dashed,fit=(delay)(icn),inner sep=3mm,label={[font=\scriptsize]above:consequence attribution}] {};
 \end{tikzpicture}
+}%
 \caption{Implementation-level CCPL data flow. Delayed feedback is retained
 in replay, aligned when a source delay is available, and used by the delay
 model, ICN, critics, and safety-selection gate.}
@@ -173,6 +175,7 @@ model, ICN, critics, and safety-selection gate.}
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
   node distance=7mm and 9mm,
   smallbox/.style={draw, rounded corners=1pt, align=center, minimum height=9mm,
@@ -190,6 +193,7 @@ model, ICN, critics, and safety-selection gate.}
 \draw[line] (base) -- (contrast);
 \draw[line] (contrast) -- (gate);
 \end{tikzpicture}
+}%
 \caption{ICN factorization used in the implementation. The baseline retains
 the state and history but omits the current action; this is an action-marginal
 baseline, not a state-free baseline. The difference is trained only where a
