@@ -5,12 +5,11 @@ This directory contains an anonymous ICLR-style manuscript draft for CCPL.
 ## Contents
 
 - `ccpl_paper.tex`: manuscript source.
-- `iclr2025_conference.sty`: supplied ICLR 2025 style file.
+- `iclr2027_conference.sty`: official ICLR 2027 style file.
 - `figures/archived_benchmark.png`: source snapshot used to transcribe the
   benchmark and ablation tables; it is not used as a paper figure.
 - `figures/01_topdown.png`: SafeRoute route visualization frame.
 - `figures/04_policy_comparison.png`: SafeRoute policy comparison frame.
-- `figures/07_rotating_3d.png`: SafeRoute 3D visualization frame.
 
 The SafeRoute figures are visual artifacts. No new SafeRoute numerical claim is
 made because the matching multi-seed summary was not preserved with the
@@ -32,4 +31,6 @@ pdflatex ccpl_paper.tex
 pdflatex ccpl_paper.tex
 ```
 
-The anonymous author block is intentional for an ICLR submission.
+The manuscript uses the official ICLR 2027 style. The anonymous author block
+is intentional for an ICLR submission. The main text is expanded up to the
+ICLR nine-page limit; appendices follow the references.
