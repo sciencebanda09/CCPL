@@ -17,6 +17,8 @@ dist/
 
 # Experiment outputs and large local data
 data/
+!ccpl-delayed-horizon/data/
+!ccpl-delayed-horizon/data/.gitkeep
 datasets/
 checkpoints/
 *.npz

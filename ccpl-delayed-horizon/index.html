@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delayed Horizon | CCPL</title>
+  <style>
+    :root { --bg:#101417; --panel:#171d20; --line:#303b3d; --text:#e6ece8; --muted:#8e9c96; --teal:#5de0c1; --amber:#f2b65d; --red:#e96d5d; --blue:#76b8ff; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--text); background:var(--bg); font:14px Inter, ui-sans-serif, system-ui, sans-serif; }
+    .shell { display:grid; grid-template-columns:300px 1fr; min-height:100vh; }
+    aside { padding:25px 22px; border-right:1px solid var(--line); background:#14191b; }
+    .mark { color:var(--teal); font-size:11px; letter-spacing:2px; font-weight:800; }
+    h1 { margin:10px 0 8px; font-size:29px; letter-spacing:-.7px; }
+    h2 { margin:0; font-size:19px; }
+    p { color:var(--muted); line-height:1.55; }
+    .control { margin-top:25px; }
+    label { display:flex; justify-content:space-between; margin:15px 0 7px; color:var(--muted); font-size:12px; }
+    select, button { width:100%; min-height:39px; padding:9px 11px; border:1px solid var(--line); border-radius:5px; color:var(--text); background:#20282a; font:inherit; }
+    button { cursor:pointer; color:#0d211d; background:var(--teal); border-color:#8af0d9; font-weight:750; }
+    button.secondary { margin-top:8px; color:var(--text); background:transparent; border-color:var(--line); }
+    input[type=range] { width:100%; accent-color:var(--teal); }
+    .note { margin-top:24px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+    main { min-width:0; padding:20px; }
+    .topbar { display:flex; align-items:end; justify-content:space-between; gap:15px; margin-bottom:13px; }
+    .sub { margin-top:5px; color:var(--muted); font-size:12px; }
+    .status { color:var(--teal); font-size:11px; letter-spacing:1.5px; font-weight:800; }
+    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-bottom:10px; }
+    .metric { padding:12px; border:1px solid var(--line); border-radius:6px; background:var(--panel); }
+    .metric span { display:block; color:var(--muted); font-size:10px; letter-spacing:1px; text-transform:uppercase; }
+    .metric strong { display:block; margin-top:6px; font-size:20px; }
+    .stage { position:relative; min-height:calc(100vh - 155px); overflow:hidden; border:1px solid var(--line); border-radius:7px; background:#0d1113; }
+    #world { display:block; width:100%; height:calc(100vh - 155px); min-height:510px; }
+    .scene-label { position:absolute; left:14px; top:13px; padding:7px 9px; border:1px solid var(--line); border-radius:4px; color:var(--muted); background:rgba(16,20,23,.82); font-size:11px; }
+    .legend { position:absolute; left:14px; bottom:13px; display:flex; gap:13px; flex-wrap:wrap; padding:8px 10px; border:1px solid var(--line); border-radius:4px; background:rgba(16,20,23,.88); color:var(--muted); font-size:11px; }
+    .dot { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:50%; background:var(--teal); }
+    .dot.red { background:var(--red); }.dot.amber { background:var(--amber); }.dot.blue { background:var(--blue); }
+    .readout { position:absolute; right:14px; bottom:13px; width:245px; padding:11px 12px; border:1px solid var(--line); border-radius:4px; background:rgba(16,20,23,.9); }
+    .readout h3 { margin:0 0 8px; font-size:12px; }.readout p { margin:4px 0; font-size:11px; }
+    @media (max-width:850px) { .shell { grid-template-columns:1fr; } aside { border-right:0; border-bottom:1px solid var(--line); } main { padding:12px; }.stage,#world { min-height:450px; height:calc(100vh - 450px); }.metrics { grid-template-columns:repeat(2,1fr); } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="mark">DELAYED HORIZON / FREIGHT RUN</div>
+      <h1>Route the fleet.</h1>
+      <p>Move cargo through a changing district. Shortcuts are faster, but a hazard can surface several turns after the decision that caused it.</p>
+      <div class="control">
+        <label for="rollout">Recorded run</label>
+        <select id="rollout"></select>
+        <label for="speed">Playback <output id="speedValue">1x</output></label>
+        <input id="speed" type="range" min="1" max="5" value="1">
+        <button id="play">Pause route</button>
+        <button id="replay" class="secondary">Replay from start</button>
+      </div>
+      <div class="control">
+        <label><span>Delayed events</span><input id="events" type="checkbox" checked></label>
+        <label><span>Route trace</span><input id="trace" type="checkbox" checked></label>
+      </div>
+      <div class="note">The route is replayed from a CCPL checkpoint. The scene is a research visualization, not a live controller.</div>
+    </aside>
+    <main>
+      <div class="topbar"><div><h2>District 04 / North freight corridor</h2><div class="sub" id="source">Loading recorded rollout...</div></div><div class="status" id="status">CONNECTING</div></div>
+      <div class="metrics"><div class="metric"><span>Route status</span><strong id="route">--</strong></div><div class="metric"><span>Consequence budget</span><strong id="budget">--</strong></div><div class="metric"><span>Delayed cost</span><strong id="cost">--</strong></div><div class="metric"><span>Turn</span><strong id="turn">--</strong></div></div>
+      <div class="stage"><canvas id="world"></canvas><div class="scene-label" id="sceneLabel">DISTRICT 04 / LIVE REPLAY</div><div class="legend"><span><i class="dot"></i>vehicle</span><span><i class="dot red"></i>hazard</span><span><i class="dot amber"></i>delayed event</span><span><i class="dot blue"></i>delivery point</span></div><div class="readout"><h3 id="vehicleName">CCPL-01</h3><p id="eventText">Waiting for rollout data.</p><p id="detail">--</p></div></div>
+    </main>
+  </div>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"}}</script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const $ = id => document.getElementById(id);
+    const canvas = $('world');
+    let data = null, rollout = null, frame = 0, playing = true, speed = 1, last = 0;
+    let scene, camera, renderer, controls, vehicle, routeLine, rings = [], hazardGroup, goal;
+    const teal = 0x5de0c1, red = 0xe96d5d, amber = 0xf2b65d, blue = 0x76b8ff;
+
+    function setup() {
+      scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d1113); scene.fog = new THREE.Fog(0x0d1113, 24, 55);
+      camera = new THREE.PerspectiveCamera(42, 1, .1, 100); camera.position.set(15, 17, 19);
+      renderer = new THREE.WebGLRenderer({canvas, antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true;
+      controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0,0,0); controls.enableDamping = true; controls.maxPolarAngle = Math.PI / 2.05;
+      scene.add(new THREE.HemisphereLight(0xb9d7d0, 0x17201f, 2.2)); const sun = new THREE.DirectionalLight(0xffe2bb, 2.5); sun.position.set(-8,18,9); sun.castShadow=true; scene.add(sun);
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(34,34), new THREE.MeshStandardMaterial({color:0x17201f, roughness:.93})); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+      const grid = new THREE.GridHelper(28,28,0x33433f,0x22302d); grid.position.y=.02; scene.add(grid);
+      for(let i=0;i<18;i++){ const h=.35+Math.random()*1.4; const m=new THREE.Mesh(new THREE.BoxGeometry(.65,h,.65),new THREE.MeshStandardMaterial({color:i%3?0x263331:0x31403b})); m.position.set((Math.random()-.5)*25,h/2,(Math.random()-.5)*23); m.castShadow=true; scene.add(m); }
+      window.addEventListener('resize', resize); resize(); animate(0);
+    }
+    function resize(){ const w=canvas.clientWidth,h=canvas.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+    function point(pos, y=.34){ return new THREE.Vector3((pos[0]-data.size/2)*1.22, y, (pos[1]-data.size/2)*1.22); }
+    function material(color, emissive=0){ return new THREE.MeshStandardMaterial({color, emissive, emissiveIntensity:emissive?1.5:0, roughness:.55}); }
+    function buildRun(){
+      rings.forEach(r=>scene.remove(r)); rings=[]; if(hazardGroup) scene.remove(hazardGroup); if(vehicle) scene.remove(vehicle); if(routeLine) scene.remove(routeLine); if(goal) scene.remove(goal);
+      hazardGroup=new THREE.Group(); scene.add(hazardGroup);
+      rollout.hazards.forEach(([x,y])=>{ const h=new THREE.Mesh(new THREE.CylinderGeometry(.42,.42,.32,6),material(red,red)); h.position.copy(point([x,y],.18)); h.castShadow=true; hazardGroup.add(h); const stem=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.55,6),material(red)); stem.position.copy(point([x,y],.47)); hazardGroup.add(stem); });
+      goal=new THREE.Mesh(new THREE.OctahedronGeometry(.48),material(blue,blue)); goal.position.copy(point(rollout.goal,1.05)); goal.castShadow=true; scene.add(goal);
+      vehicle=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(.65,.38,1.05),material(teal,teal)); body.castShadow=true; vehicle.add(body); const cabin=new THREE.Mesh(new THREE.BoxGeometry(.48,.24,.42),material(0xd9f3e9)); cabin.position.y=.3; cabin.position.z=-.08; vehicle.add(cabin); scene.add(vehicle);
+      const pts=rollout.trace.map(t=>point(t.position,.45)); routeLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:teal,transparent:true,opacity:.42})); scene.add(routeLine);
+      frame=0; draw();
+    }
+    function draw(){ if(!rollout)return; const idx=Math.min(frame,rollout.trace.length-1), t=rollout.trace[idx], p=point(t.position,.55); vehicle.position.copy(p); vehicle.rotation.y=(t.action===0?Math.PI:t.action===2?Math.PI/2:t.action===3?-Math.PI/2:0); routeLine.visible=$('trace').checked; hazardGroup.visible=true; $('turn').textContent=`${idx+1}/${rollout.trace.length}`; $('cost').textContent=rollout.cost.toFixed(2); $('budget').textContent=`${Math.max(0,3-rollout.cost).toFixed(2)} left`; $('route').textContent=rollout.complete?'COMPLETE':'IN TRANSIT'; $('vehicleName').textContent=`${rollout.id} / seed ${rollout.seed}`; $('eventText').textContent=t.event==='clear'?'Route clear':`${t.event} recorded`; $('detail').textContent=`reward ${t.reward.toFixed(3)} · delayed cost ${t.cost.toFixed(3)} · immediate risk ${t.immediate_cost.toFixed(3)}`; rings.forEach(r=>scene.remove(r)); rings=[]; if($('events').checked && t.cost>0){ const ring=new THREE.Mesh(new THREE.RingGeometry(.45,.53,40),new THREE.MeshBasicMaterial({color:amber,side:THREE.DoubleSide,transparent:true,opacity:.9})); ring.rotation.x=-Math.PI/2; ring.position.copy(p); ring.position.y=.08; scene.add(ring); rings.push(ring); } }
+    function animate(now){ requestAnimationFrame(animate); if(playing && rollout && now-last>220/speed){ frame=(frame+1)%rollout.trace.length; last=now; draw(); } if(vehicle){ vehicle.position.y=.52+Math.sin(now/260)*.035; goal.rotation.y+=.01; } controls.update(); renderer.render(scene,camera); }
+    async function load(){ try{ const response=await fetch('data/rollouts.json'); if(!response.ok)throw Error(); data=await response.json(); $('status').textContent='ROLLout ready'.toUpperCase(); $('source').textContent=`${data.source} · delay ${data.delay} · budget ${data.budget}`; data.rollouts.forEach((r,i)=>{ const option=document.createElement('option'); option.value=i; option.textContent=`${r.id} · seed ${r.seed}`; $('rollout').append(option); }); rollout=data.rollouts[0]; buildRun(); }catch(e){ $('status').textContent='NO DATA'; $('source').textContent='Generate data/rollouts.json from a CCPL checkpoint to load a recorded route.'; $('eventText').textContent='No rollout file found.'; } }
+    $('rollout').addEventListener('change',e=>{rollout=data.rollouts[Number(e.target.value)];buildRun();}); $('play').addEventListener('click',()=>{playing=!playing;$('play').textContent=playing?'Pause route':'Play route';}); $('replay').addEventListener('click',()=>{frame=0;playing=true;$('play').textContent='Pause route';draw();}); $('speed').addEventListener('input',e=>{speed=Number(e.target.value);$('speedValue').textContent=`${speed}x`;}); $('events').addEventListener('change',draw); $('trace').addEventListener('change',draw);
+    setup(); load();
+  </script>
+</body>
+</html>
