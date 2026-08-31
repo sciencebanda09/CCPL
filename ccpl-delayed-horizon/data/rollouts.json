@@ -1,0 +1,660 @@
+{
+  "title": "Delayed Horizon",
+  "source": "CCPL checkpoint rollout in FreightWorldEnv",
+  "checkpoint": "ccpl-saferoute\\results\\paper_smoke\\ccpl_seed42.pkl",
+  "delay": 10,
+  "budget": 3.0,
+  "size": 12,
+  "rollouts": [
+    {
+      "id": "CCPL-01",
+      "policy": "CCPL",
+      "seed": 42,
+      "reward": 2.562,
+      "cost": 1.1740735638749689,
+      "complete": true,
+      "trace": [
+        {
+          "position": [
+            2,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            3,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            4,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            4,
+            1
+          ],
+          "action": 2,
+          "reward": -0.056999999999999995,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            3,
+            1
+          ],
+          "action": 2,
+          "reward": -0.056999999999999995,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            4,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            6,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 2,
+          "reward": -0.056999999999999995,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            5,
+            1
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            6,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            7,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            8,
+            1
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            8,
+            2
+          ],
+          "action": 1,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            9,
+            2
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            9,
+            3
+          ],
+          "action": 1,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            9,
+            4
+          ],
+          "action": 1,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            9,
+            5
+          ],
+          "action": 1,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            9,
+            6
+          ],
+          "action": 1,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            9,
+            7
+          ],
+          "action": 1,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            9,
+            7
+          ],
+          "action": 1,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 1.0,
+          "event": "loading_zone_hazard"
+        },
+        {
+          "position": [
+            9,
+            7
+          ],
+          "action": 4,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            9,
+            7
+          ],
+          "action": 1,
+          "reward": -0.012,
+          "cost": 0.0,
+          "immediate_cost": 1.0,
+          "event": "loading_zone_hazard"
+        },
+        {
+          "position": [
+            10,
+            7
+          ],
+          "action": 3,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            10,
+            8
+          ],
+          "action": 1,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            10,
+            9
+          ],
+          "action": 1,
+          "reward": 0.033,
+          "cost": 0.0,
+          "immediate_cost": 0.0,
+          "event": "clear"
+        },
+        {
+          "position": [
+            10,
+            10
+          ],
+          "action": 1,
+          "reward": 2.433,
+          "cost": 2.0,
+          "immediate_cost": 0.0,
+          "event": "delivery"
+        }
+      ],
+      "hazards": [
+        [
+          2,
+          8
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          4,
+          10
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          5,
+          7
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          7,
+          3
+        ],
+        [
+          8,
+          5
+        ],
+        [
+          9,
+          1
+        ],
+        [
+          9,
+          8
+        ]
+      ],
+      "goal": [
+        10,
+        10
+      ]
+    }
+  ]
+}

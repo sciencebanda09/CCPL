@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ccpl-saferoute"))
 
 from ccpl import CCPLAgent, run_episode
-from saferoute.env import SafeRouteEnv
+from world import FreightWorldEnv
 
 
 def generate(checkpoint: Path, output: Path, seeds: list[int], delay: int) -> None:
@@ -18,7 +18,7 @@ def generate(checkpoint: Path, output: Path, seeds: list[int], delay: int) -> No
     rollouts = []
     for index, seed in enumerate(seeds):
         agent = copy.deepcopy(base_agent)
-        env = SafeRouteEnv(seed=seed, delay=delay, max_steps=80)
+        env = FreightWorldEnv(seed=seed, delay=delay, max_steps=80)
         result = run_episode(agent, env, train=False)
         stats = env.episode_stats()
         rollouts.append({
@@ -34,7 +34,7 @@ def generate(checkpoint: Path, output: Path, seeds: list[int], delay: int) -> No
         })
     payload = {
         "title": "Delayed Horizon",
-        "source": "CCPL SafeRoute checkpoint rollout",
+        "source": "CCPL checkpoint rollout in FreightWorldEnv",
         "checkpoint": str(checkpoint),
         "delay": delay,
         "budget": 3.0,
