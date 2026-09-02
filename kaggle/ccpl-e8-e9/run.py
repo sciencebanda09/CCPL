@@ -1,8 +1,10 @@
-import dataclasses
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tarfile
 import time
 from pathlib import Path
 
@@ -15,33 +17,52 @@ os.environ.update({
     "OPENBLAS_NUM_THREADS": "1",
 })
 
-repo = Path("/kaggle/working/CCPL")
+repo = Path(os.environ.get("CCPL_SOURCE", "/kaggle/input/ccpl-source"))
 results = Path("/kaggle/working/ccpl_e8_e9_results")
-episodes = os.environ.get("CCPL_EPISODES", "100")
+episodes = os.environ.get("CCPL_EPISODES", "500")
 eval_episodes = os.environ.get("CCPL_EVAL_EPISODES", "20")
-seed_values = os.environ.get("CCPL_SEEDS", "42,43,44")
-max_steps = os.environ.get("CCPL_MAX_STEPS", "100")
+seed_values = os.environ.get("CCPL_SEEDS", "42,43,44,45,46")
+max_steps = os.environ.get("CCPL_MAX_STEPS", "500")
 delay = os.environ.get("CCPL_DELAY", "5")
-timeout = int(os.environ.get("CCPL_TIMEOUT", "900"))
+delay_mode = os.environ.get("CCPL_DELAY_MODE", "fixed")
+timeout = int(os.environ.get("CCPL_TIMEOUT", "3600"))
+tasks = os.environ.get("CCPL_TASKS", "SafetyPointGoal1,SafetyPointGoal2")
+experiments = [name.strip() for name in os.environ.get("CCPL_EXPERIMENTS", "E8").split(",")
+               if name.strip()]
+policies = ["CCPL", "CPO-FO", "PPO", "SAC-Lag", "CCPL-Base"]
 
 
 def install():
-    subprocess.run(["git", "clone", "--depth", "1",
-                    "https://github.com/sciencebanda09/CCPL.git", str(repo)], check=True)
+    global repo
+    if not (repo / "ccpl_experiments.py").exists():
+        archive = repo / "ccpl.tar"
+        if not archive.exists():
+            raise FileNotFoundError(f"CCPL dataset source is missing: {repo}")
+        extracted = Path("/kaggle/working/CCPL")
+        extracted.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive) as handle:
+            handle.extractall(extracted)
+        shutil.copy2(repo / "ccpl_experiments.py", extracted / "ccpl_experiments.py")
+        shutil.copy2(repo / "pyproject.toml", extracted / "pyproject.toml")
+        shutil.copy2(repo / "README.md", extracted / "README.md")
+        repo = extracted
+    if not (repo / "ccpl_experiments.py").exists():
+        raise FileNotFoundError(f"CCPL dataset source is missing: {repo}")
     packages = [
         "numpy==1.26.4",
         "scipy>=1.10",
         "matplotlib>=3.7",
         "gymnasium==0.28.1",
-        "mujoco==2.3.3",
+        "mujoco==3.1.6",
         "xmltodict",
     ]
     subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--upgrade", *packages], check=True)
     subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--no-deps",
                     "pygame==2.6.1", "gymnasium-robotics==1.2.2",
                     "safety-gymnasium==1.0.0"], check=True)
-    subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--no-deps", "-e", "."],
-                   cwd=repo, check=True)
+    # The experiment runner is executed from the extracted source tree.
+    # Avoid an editable build because the Kaggle Python image has a separate
+    # preinstalled build stack that is incompatible with this legacy layout.
 
 
 def write_sitecustomize():
@@ -81,38 +102,48 @@ def main():
     results.mkdir(parents=True, exist_ok=True)
     install()
     write_sitecustomize()
+    revision = hashlib.sha256((repo / "ccpl_experiments.py").read_bytes()).hexdigest()
     seeds = [int(value.strip()) for value in seed_values.split(",") if value.strip()]
     child_env = os.environ.copy()
     child_env["PYTHONPATH"] = "/kaggle/working:/kaggle/working/CCPL"
     help_text = subprocess.check_output(
-        [sys.executable, "ccpl_experiments.py", "--help"], cwd=repo, text=True
+        [sys.executable, "ccpl_experiments.py", "--help"],
+        cwd=repo, env=child_env, text=True
     )
     common = ["--episodes", episodes, "--eval-episodes", eval_episodes,
               "--seeds", str(len(seeds)), "--max-steps", max_steps,
-              "--delay", delay, "--out", str(results)]
+              "--delay", delay, "--delay-mode", delay_mode,
+              "--tasks", tasks, "--out", str(results)]
     if "--seed-values" in help_text:
         common += ["--seed-values", ",".join(str(seed) for seed in seeds)]
 
     protocol = {
-        "experiments": ["E8", "E9"],
+        "source": str(repo),
+        "source_sha256_ccpl_experiments": revision,
+        "experiments": experiments,
+        "tasks": [name.strip() for name in tasks.split(",") if name.strip()],
+        "policies": policies,
         "episodes": int(episodes),
         "evaluation_episodes": int(eval_episodes),
         "seeds": seeds,
         "max_steps": int(max_steps),
         "delay": int(delay),
+        "delay_mode": delay_mode,
         "dependencies": {
             "gymnasium": "0.28.1",
-            "mujoco": "2.3.3",
+            "mujoco": "3.1.6",
             "safety_gymnasium": "1.0.0",
         },
     }
     (results / "protocol.json").write_text(json.dumps(protocol, indent=2), encoding="utf-8")
     statuses = {}
-    for name in ("E8", "E9"):
+    for name in experiments:
         print(f"\n===== {name} =====")
         statuses[name] = run_experiment(name, common, child_env)
         (results / "status.json").write_text(
-            json.dumps({"protocol": protocol, "experiments": statuses}, indent=2),
+            json.dumps({"success": all(item.get("status") == "passed"
+                                        for item in statuses.values()),
+                        "protocol": protocol, "experiments": statuses}, indent=2),
             encoding="utf-8",
         )
         print(json.dumps({name: statuses[name]}, indent=2))

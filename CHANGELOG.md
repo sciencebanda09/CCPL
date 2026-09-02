@@ -3,6 +3,18 @@
 This file records user-visible changes to the research artifact. It does not
 replace the experiment protocol or the paper's version history.
 
+## Unreleased
+
+### Added
+
+- Standalone MATLAB Kinova and ATLAS robotics demonstrations.
+- ATLAS Simscape Multibody preparation with inertial checks, torque-actuation
+  setup, gait-reference generation, and physical-interface guards.
+- Documentation of the project’s practical contribution: delayed safety credit
+  assignment, causal consequence attribution, separate critics, and
+  provenance-aware evaluation.
+- Ignore rules for generated MATLAB/Simulink caches and local robotics outputs.
+
 ## [0.7.6] - 2026-08-24
 
 ### Changed

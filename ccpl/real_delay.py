@@ -24,6 +24,7 @@ class LoggedTransition:
     delay: Optional[int] = None
     source_timestep: Optional[int] = None
     causal_label: Optional[float] = None
+    metadata: Optional[dict[str, Any]] = None
 
     @classmethod
     def from_mapping(cls, row: dict[str, Any]) -> "LoggedTransition":
@@ -61,6 +62,7 @@ class LoggedTransition:
             delay=delay,
             source_timestep=source,
             causal_label=None if causal_label is None else float(causal_label),
+            metadata=dict(row.get("metadata") or {}),
         )
 
 
@@ -147,6 +149,9 @@ class LoggedTrajectoryDataset:
     def summary(self) -> dict[str, Any]:
         rows = [row for episode in self.episodes.values() for row in episode]
         delays = [record["delay"] for record in self.alignment_records()]
+        actions = [row.action for row in rows]
+        timestamps = [row.timestamp for row in rows]
+        duplicate_timestamps = sum(a == b for a, b in zip(timestamps, timestamps[1:]))
         return {
             "episodes": len(self.episodes),
             "transitions": len(rows),
@@ -157,6 +162,17 @@ class LoggedTrajectoryDataset:
             "observed_delay_mean": None if not delays else sum(delays) / len(delays),
             "observed_delay_min": None if not delays else min(delays),
             "observed_delay_max": None if not delays else max(delays),
+            "action_count": len(set(actions)),
+            "action_min": min(actions),
+            "action_max": max(actions),
+            "duplicate_adjacent_timestamps": duplicate_timestamps,
+            "negative_consequence_count": sum(row.consequence < 0 for row in rows),
+            "causal_label_count": sum(row.causal_label is not None for row in rows),
+            "causal_identification": (
+                "externally supplied labels present; validate provenance separately"
+                if any(row.causal_label is not None for row in rows)
+                else "not claimed from observational logs"
+            ),
         }
 
 

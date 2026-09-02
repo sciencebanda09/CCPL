@@ -39,6 +39,72 @@ mlruns/
 *.tmp
 *.bak
 
+# MATLAB and Simulink generated state, cache, and experiment artifacts
+*.asv
+*.slxc
+*.slx.autosave
+*.fig
+# Local CCPL MATLAB/Simscape validation project outputs
+ccpl_kinova_results.mat
+ccpl_atlas_results.mat
+ccpl_atlas_physical_config.mat
+ccpl_atlas_physical_model.slx*
+results/Matlab/
+
+# Local CCPL validation projects and generated research assets
+List_of_attacks_Final.xlsx
+Physical/
+ccpl-airspace-guardian/
+ccpl-delayed-horizon/data/delayed_safety.json
+ccpl-delayed-horizon/events.py
+ccpl-delayed-horizon/safety-gym.html
+ccpl-delayed-horizon/test_world.py
+ccpl-delayed-horizon/train_district.py
+ccpl-neurocity/
+ccpl-saferoute/tests/test_console.py
+ccpl/algorithms/continuous_ccpl.py
+ccpl/algorithms/cooperative_attribution.py
+ccpl/calibration.py
+ccpl/environments/delayed_safety_gym.py
+ccpl/environments/multi_action.py
+ccpl/offline.py
+ccpl/offline_policy.py
+ccpl/real_data.py
+ccpl_atlas_balance_ccpl_demo.m
+ccpl_atlas_physical_walker.m
+ccpl_kinova_ccpl_demo.m
+docs/NEURIPS_REVIEW_PROTOCOL.md
+kaggle/ccpl-neurips-review-v2/
+kaggle/ccpl-neurips-review/
+kaggle/ccpl-source/
+kaggle/**/*.ipynb
+kaggle/**/.ipynb_checkpoints/
+mujoco-circle/
+scripts/audit_swat_wadi.py
+scripts/convert_swat_csv_to_jsonl.py
+scripts/convert_swat_xlsx.py
+scripts/convert_trifinger_rrc.py
+scripts/create_trifinger_figures.py
+scripts/evaluate_real_data.py
+scripts/plot_antcircle_runs.py
+scripts/plot_antcircle_trajectories.py
+scripts/render_antcircle_ccpl.py
+scripts/run_antcircle_ccpl.py
+scripts/run_antcircle_ccpl_continuous.py
+scripts/run_antcircle_cpu.py
+scripts/run_cooperative_attribution_benchmark.py
+scripts/run_delayed_safety.py
+scripts/run_multi_action_attribution.py
+scripts/run_real_benchmark.py
+scripts/score_delay_calibration.py
+scripts/train_offline_policies.py
+tests/test_continuous_ccpl.py
+tests/test_delayed_safety_wrapper.py
+tests/test_multi_action_calibration.py
+tests/test_offline.py
+tests/test_offline_policy.py
+tests/test_real_data.py
+
 # Keep generated result directories local by default. Curated artifacts can be
 # added explicitly with `git add -f` and must include their provenance.
 results*/**/*.json

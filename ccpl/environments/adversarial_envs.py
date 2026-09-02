@@ -1,6 +1,11 @@
 import numpy as np
 
 try:
+    from .delayed_safety_gym import DelayedConsequenceWrapper
+except ImportError:  # Imported as a top-level module by the experiment runner.
+    from delayed_safety_gym import DelayedConsequenceWrapper
+
+try:
     from .environments import BaseEnv, ENV_REGISTRY
 except ImportError:
     from environments import BaseEnv, ENV_REGISTRY
@@ -164,6 +169,7 @@ class SafetyGymAdapter:
                  max_steps: int = 1000,
                  seed: int = 0,
                  consequence_delay: int = 0,
+                 delay_mode: str = "immediate",
                  **_kw):
         if int(max_steps) <= 0:
             raise ValueError("max_steps must be positive")
@@ -192,10 +198,15 @@ class SafetyGymAdapter:
         self.action_dim = 2 * self.raw_action_dim + 1
         self.requested_action_dim = action_dim
         self._seed        = int(seed)
+        self.delay_mode = delay_mode
+        self._delayed = DelayedConsequenceWrapper(
+            self._raw, mode=delay_mode, delay=consequence_delay,
+            seed=self._seed, auto_reset=False)
 
         self._step        = 0
         self._done        = False
         self._cum_cost    = 0.0
+        self._cum_raw_cost = 0.0
         self._cum_reward  = 0.0
         self._delayed_hits = 0
 
@@ -203,13 +214,14 @@ class SafetyGymAdapter:
     def reset(self, seed: int | None = None):
         _seed = seed if seed is not None else self._seed
         try:
-            reset_out = self._raw.reset(seed=_seed)
+            reset_out = self._delayed.reset(seed=_seed)
         except TypeError:
-            reset_out = self._raw.reset()
+            reset_out = self._delayed.reset()
         obs = reset_out[0] if isinstance(reset_out, tuple) else reset_out
         self._step        = 0
         self._done        = False
         self._cum_cost    = 0.0
+        self._cum_raw_cost = 0.0
         self._cum_reward  = 0.0
         self._delayed_hits = 0
         return np.asarray(obs, np.float32)
@@ -218,27 +230,38 @@ class SafetyGymAdapter:
         if self._done:
             raise RuntimeError("step() called after the episode terminated")
         raw_action = self._map_action(action)
-        outcome = self._raw.step(raw_action)
-        if len(outcome) == 6:
-            obs, reward, cost, terminated, truncated, info = outcome
-        elif len(outcome) == 5:
-            obs, reward, terminated, truncated, info = outcome
-            cost = info.get("cost", 0.0)
+        delayed = getattr(self, "_delayed", None)
+        if delayed is not None:
+            obs, reward, cost, done, info = delayed.step(raw_action)
         else:
-            raise RuntimeError(
-                f"Unexpected Safety Gymnasium step tuple of length {len(outcome)}"
-            )
+            # Keep compatibility with lightweight adapter doubles used by tests.
+            outcome = self._raw.step(raw_action)
+            if len(outcome) == 6:
+                obs, reward, cost, terminated, truncated, info = outcome
+                done = bool(terminated or truncated)
+            elif len(outcome) == 5:
+                obs, reward, terminated, truncated, info = outcome
+                cost = info.get("cost", 0.0)
+                done = bool(terminated or truncated)
+            else:
+                raise RuntimeError(
+                    f"Unexpected Safety Gymnasium step tuple of length {len(outcome)}"
+                )
         cost = float(cost)
-        info = dict(info)
-        info.setdefault("cost", cost)
-        info.setdefault("actual_tau", 0)
-        info.setdefault("delay_supervision_valid", True)
+        info = dict(info or {})
+        delay_mode = getattr(self, "delay_mode", "immediate")
+        raw_cost = float(info.get("raw_cost", cost if delay_mode == "immediate" else 0.0))
+        info["cost"] = cost
+        info["immediate_consequence"] = raw_cost
+        info.setdefault("actual_tau", 0 if delay_mode == "immediate" else None)
+        info.setdefault("delay_supervision_valid", delay_mode == "immediate")
         info.setdefault("scm_label_valid", False)
 
         self._step        += 1
         self._cum_cost    += cost
+        self._cum_raw_cost = getattr(self, "_cum_raw_cost", 0.0) + raw_cost
         self._cum_reward  += reward
-        self._done = terminated or truncated or self._step >= self.max_steps
+        self._done = bool(done or self._step >= self.max_steps)
 
         if cost > 0:
             self._delayed_hits += 1
@@ -248,7 +271,10 @@ class SafetyGymAdapter:
             "delayed_hits": self._delayed_hits,
             "total_reward": self._cum_reward,
             "total_consequence": self._cum_cost,
-            "immediate_consequence": cost,
+            "original_consequence": getattr(self, "_cum_raw_cost", 0.0),
+            "original_consequence": self._cum_raw_cost,
+            "immediate_consequence": raw_cost,
+            "delayed_cost": cost,
         })
 
         return (np.asarray(obs, np.float32),
@@ -285,7 +311,7 @@ class SafetyGymAdapter:
         return action.reshape(act_space.shape)
 
     def close(self):
-        return self._raw.close()
+        return self._delayed.close()
 
 
 
@@ -326,7 +352,8 @@ def _make_safety_factory(task_name: str,
                           action_dim: int | None = None,
                           max_steps: int = 500):
     """Return a zero-arg constructor compatible with ENV_REGISTRY conventions."""
-    def _factory(seed: int = 0, consequence_delay: int = 0, **kw):
+    def _factory(seed: int = 0, consequence_delay: int = 0,
+                 delay_mode: str = "immediate", **kw):
         episode_steps = int(kw.pop("max_steps", max_steps))
         return SafetyGymAdapter(
             task_name            = task_name,
@@ -334,6 +361,8 @@ def _make_safety_factory(task_name: str,
             action_dim           = action_dim,
             max_steps            = episode_steps,
             seed                 = seed,
+            consequence_delay    = consequence_delay,
+            delay_mode           = delay_mode,
         )
     _factory.__name__ = task_name
     return _factory

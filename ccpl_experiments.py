@@ -270,56 +270,56 @@ def run_E3(args):
     _sep("E3 — ICN Agreement with the Synthetic One-Step SCM Reference")
     out = os.path.join(args.out, "E3")
     os.makedirs(out, exist_ok=True)
-
-    scm    = EnvironmentSCM()
-    labgen = CausalLabelGenerator(scm)
-    rng    = np.random.default_rng(args.seed)
     action_names = ["DEFER", "PARTIAL", "FULL", "INVEST", "REBALANCE"]
-    heldout_states = rng.uniform(
-        0.1, 0.9, (500, STATE_DIM)).astype(np.float32)
-    heldout_actions = rng.integers(
-        0, ACTION_DIM, 500).astype(np.int32)
+    checkpoints = list(range(0, args.episodes + 1, 50))
+    if checkpoints[-1] != args.episodes:
+        checkpoints.append(args.episodes)
+    scm = EnvironmentSCM()
+    seed_results = {}
+    for seed in _seed_values(args):
+        rng = np.random.default_rng(seed)
+        states = rng.uniform(0.1, 0.9, (500, STATE_DIM)).astype(np.float32)
+        actions = rng.integers(0, ACTION_DIM, 500).astype(np.int32)
+        labels = CausalLabelGenerator(scm).generate_batch(states, actions, ACTION_DIM)
+        scm_dc = labels["delta_C_scm"]
+        agent = make_ccpl(STATE_DIM, ACTION_DIM, seed=seed, pretrain_steps=200)
+        seed_results[str(seed)] = {}
+        trained = 0
+        for n_ep in checkpoints:
+            from environments import StandardEnv
+            for ep in range(trained, n_ep):
+                run_episode(agent, StandardEnv(max_steps=100, seed=seed + ep), train=True)
+            trained = n_ep
+            ctx = np.zeros((500, agent.icn.causal_dim), np.float32)
+            delta_C, _, _, _ = agent.icn.forward(states, actions, ctx)
+            mae = float(np.abs(delta_C - scm_dc).mean())
+            corr = float(np.corrcoef(delta_C, scm_dc)[0, 1]) if np.std(delta_C) > 1e-12 else 0.0
+            sign_ag = float(np.mean(np.sign(delta_C) == np.sign(scm_dc)))
+            per_action = {}
+            for a in range(ACTION_DIM):
+                mask = actions == a
+                if mask.sum() > 5:
+                    per_action[action_names[a]] = {
+                        "mae": round(float(np.abs(delta_C[mask] - scm_dc[mask]).mean()), 5),
+                        "mean_scm": round(float(scm_dc[mask].mean()), 5),
+                        "mean_icn": round(float(delta_C[mask].mean()), 5),
+                    }
+            seed_results[str(seed)][str(n_ep)] = {
+                "mae": round(mae, 5), "corr": round(corr, 4),
+                "sign_agreement": round(sign_ag, 4), "per_action": per_action,
+            }
+            print(f"  Seed {seed} after {n_ep:4d} eps: MAE={mae:.5f}  Corr={corr:.4f}  SignAg={sign_ag:.4f}")
 
     results_by_episodes = {}
-
-    for n_ep in [0, 50, 100, 200, 500]:
-        if n_ep > args.episodes: continue
-
-        agent = make_ccpl(STATE_DIM, ACTION_DIM, seed=args.seed, pretrain_steps=200)
-        if n_ep > 0:
-            from environments import StandardEnv
-            for ep in range(n_ep):
-                env = StandardEnv(max_steps=100, seed=ep)
-                run_episode(agent, env, train=True)
-
-        states = heldout_states
-        actions = heldout_actions
-        ctx     = np.zeros((500, agent.icn.causal_dim), np.float32)
-        delta_C, _, _, sigma = agent.icn.forward(states, actions, ctx)
-
-        labels  = labgen.generate_batch(states, actions, ACTION_DIM)
-        scm_dc  = labels["delta_C_scm"]
-
-        mae     = float(np.abs(delta_C - scm_dc).mean())
-        corr    = float(np.corrcoef(delta_C, scm_dc)[0, 1])
-        sign_ag = float(np.mean(np.sign(delta_C) == np.sign(scm_dc)))
-
-        per_action = {}
-        for a in range(ACTION_DIM):
-            mask = actions == a
-            if mask.sum() > 5:
-                per_action[action_names[a]] = {
-                    "mae":  round(float(np.abs(delta_C[mask] - scm_dc[mask]).mean()), 5),
-                    "mean_scm":  round(float(scm_dc[mask].mean()), 5),
-                    "mean_icn":  round(float(delta_C[mask].mean()), 5),
-                }
-
-        results_by_episodes[n_ep] = {
-            "mae": round(mae, 5), "corr": round(corr, 4),
-            "sign_agreement": round(sign_ag, 4),
-            "per_action": per_action,
-        }
-        print(f"  After {n_ep:4d} eps: MAE={mae:.5f}  Corr={corr:.4f}  SignAg={sign_ag:.4f}")
+    for n_ep in checkpoints:
+        points = [seed_results[str(seed)][str(n_ep)] for seed in _seed_values(args)]
+        aggregate = {}
+        for metric in ("mae", "corr", "sign_agreement"):
+            values = np.asarray([point[metric] for point in points], dtype=float)
+            aggregate[metric] = round(float(values.mean()), 5 if metric == "mae" else 4)
+            aggregate[f"{metric}_std"] = round(float(values.std(ddof=1)) if len(values) > 1 else 0.0, 5)
+        aggregate["per_action"] = points[-1]["per_action"]
+        results_by_episodes[n_ep] = aggregate
 
     _sep("  Per-Action ICN vs SCM (final checkpoint)")
     final = results_by_episodes[max(results_by_episodes.keys())]
@@ -336,20 +336,26 @@ def run_E3(args):
     print("  This is agreement with a specified simulator model, not causal")
     print("  identification or a comparison against every prior method.")
 
-    _save(results_by_episodes, "E3_causal_accuracy", out)
+    _save({"protocol": {"seeds": _seed_values(args), "episodes": args.episodes,
+                          "reference": "synthetic SCM; not observational causal discovery"},
+           "aggregate": results_by_episodes, "seed_results": seed_results},
+          "E3_causal_accuracy", out)
 
     import matplotlib; matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     os.makedirs(out, exist_ok=True)
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     eps = sorted(results_by_episodes.keys())
-    axes[0].plot(eps, [results_by_episodes[e]["corr"]         for e in eps], marker="o")
+    axes[0].errorbar(eps, [results_by_episodes[e]["corr"] for e in eps],
+                     yerr=[results_by_episodes[e]["corr_std"] for e in eps], marker="o", capsize=3)
     axes[0].set_title("ICN vs SCM Correlation", fontweight="bold")
     axes[0].set_xlabel("Episodes"); axes[0].set_ylabel("Pearson r"); axes[0].grid(alpha=0.25)
-    axes[1].plot(eps, [results_by_episodes[e]["mae"]          for e in eps], marker="o", color="tomato")
+    axes[1].errorbar(eps, [results_by_episodes[e]["mae"] for e in eps],
+                     yerr=[results_by_episodes[e]["mae_std"] for e in eps], marker="o", color="tomato", capsize=3)
     axes[1].set_title("ICN MAE vs SCM", fontweight="bold")
     axes[1].set_xlabel("Episodes"); axes[1].set_ylabel("MAE"); axes[1].grid(alpha=0.25)
-    axes[2].plot(eps, [results_by_episodes[e]["sign_agreement"] for e in eps], marker="o", color="green")
+    axes[2].errorbar(eps, [results_by_episodes[e]["sign_agreement"] for e in eps],
+                     yerr=[results_by_episodes[e]["sign_agreement_std"] for e in eps], marker="o", color="green", capsize=3)
     axes[2].set_title("Sign Agreement (ICN vs SCM)", fontweight="bold")
     axes[2].set_xlabel("Episodes"); axes[2].set_ylabel("Fraction"); axes[2].grid(alpha=0.25)
     fig.tight_layout()
@@ -368,8 +374,11 @@ def run_E4(args):
     from environments import StandardEnv, ShiftedConsequenceEnv
     agent = make_ccpl(STATE_DIM, ACTION_DIM, seed=args.seed, pretrain_steps=200)
 
+    # Train on the same consequence_delay used for evaluation below (10, per
+    # ShiftedConsequenceEnv), not StandardEnv's default of 5 — otherwise the
+    # delay estimator is scored against a delay value it never trained on.
     for ep in range(min(args.episodes, 300)):
-        env = StandardEnv(max_steps=100, seed=ep)
+        env = ShiftedConsequenceEnv(max_steps=100, seed=ep)
         run_episode(agent, env, train=True)
 
     observed_taus  = []
@@ -661,10 +670,10 @@ def run_E8(args):
     Each Safety Gym task uses a neutral-plus-signed-axis discretisation of its
     continuous action space.
 
-    No synthetic SCM labels are used for these tasks.  Official costs arrive
-    immediately through the six-value Safety Gymnasium step API.
+    No synthetic SCM labels are used for these tasks.  Raw Safety Gymnasium
+    costs are optionally displaced by the deterministic delayed wrapper.
     """
-    _sep("E8 — Optional Safety Gymnasium Evaluation")
+    _sep(f"E8 — Safety Gymnasium Evaluation ({args.delay_mode} costs)")
 
     if not _SAFETY_GYM_AVAILABLE:
         print("  safety-gymnasium not installed. Run: pip install safety-gymnasium")
@@ -691,7 +700,9 @@ def run_E8(args):
     compatible_tasks = []
     for task_name in sg_tasks:
         try:
-            probe = SAFETY_GYM_ENV_REGISTRY[task_name](seed=args.seed, max_steps=args.max_steps)
+            probe = SAFETY_GYM_ENV_REGISTRY[task_name](
+                seed=args.seed, max_steps=args.max_steps,
+                consequence_delay=args.delay, delay_mode=args.delay_mode)
             if hasattr(probe, "close"):
                 probe.close()
             compatible_tasks.append(task_name)
@@ -712,7 +723,8 @@ def run_E8(args):
         for task_name in sg_tasks:
             print(f"\n  Task: {task_name}")
             probe_env = SAFETY_GYM_ENV_REGISTRY[task_name](
-                seed=seed, max_steps=args.max_steps)
+                seed=seed, max_steps=args.max_steps,
+                consequence_delay=args.delay, delay_mode=args.delay_mode)
             sg_state_dim  = probe_env.state_dim
             sg_action_dim = probe_env.action_dim
             cost_budget   = probe_env.constraint_threshold
@@ -739,7 +751,9 @@ def run_E8(args):
                 for ep in range(args.episodes):
                     env = (shared_env if ep == 0 else
                            SAFETY_GYM_ENV_REGISTRY[task_name](
-                               seed=seed + ep, max_steps=args.max_steps))
+                               seed=seed + ep, max_steps=args.max_steps,
+                               consequence_delay=args.delay,
+                               delay_mode=args.delay_mode))
                     runner = run_episode if isinstance(agent, CCPLAgent) else run_episode_baseline
                     episode = runner(agent, env, train=True)
                     ep_rewards.append(episode["episode_reward"])
@@ -755,20 +769,18 @@ def run_E8(args):
                         recent_csr = float(np.mean(ep_csrs[-20:]))
                         print(f"      ep {ep+1:4d}: R={recent_r:+.3f}  CSR={recent_csr:.1f}%")
 
-            if hasattr(shared_env, "close"):
-                shared_env.close()
-
                 eval_rewards, eval_costs, eval_costs_raw, eval_csrs = [], [], [], []
                 for eval_ep in range(args.eval_episodes):
                     eval_seed = seed + 1_000_000 + eval_ep
                     env = SAFETY_GYM_ENV_REGISTRY[task_name](
-                        seed=eval_seed, max_steps=args.max_steps)
+                        seed=eval_seed, max_steps=args.max_steps,
+                        consequence_delay=args.delay,
+                        delay_mode=args.delay_mode)
                     runner = run_episode if isinstance(agent, CCPLAgent) else run_episode_baseline
                     episode = runner(agent, env, train=False)
-                    raw_cost = episode["episode_consequence_undiscounted"]
                     eval_rewards.append(episode["episode_reward"])
                     eval_costs.append(episode["episode_consequence"])
-                    eval_costs_raw.append(raw_cost)
+                    eval_costs_raw.append(episode["episode_consequence_undiscounted"])
                     eval_csrs.append(100.0 * (
                         episode["episode_consequence"] <= cost_budget))
                     if hasattr(env, "close"):
@@ -788,6 +800,14 @@ def run_E8(args):
                         round(float(c), 4) for c in eval_costs_raw],
                     "eval_csrs":        [round(float(c), 2) for c in eval_csrs],
                 }
+
+            if hasattr(shared_env, "close"):
+                shared_env.close()
+
+            # Preserve completed work if a long MuJoCo benchmark is cancelled.
+            _save({"completed_task": task_name, "seed": seed,
+                   "seed_results": all_results.get("seed_results", []) + [task_results]},
+                  "E8_safety_gym_progress", out)
 
         all_results.setdefault("seed_results", []).append(task_results)
 
@@ -1071,12 +1091,14 @@ class _SCMQualityLabels:
 
     def generate_batch(self, states, actions, n_actions=5):
         labels = self.base.generate_batch(states, actions, n_actions)
-        if self.mode == "noisy":
+        if self.mode == "noisy_scm":
             labels["delta_C_scm"] = labels["delta_C_scm"] + self.rng.normal(
                 0.0, 0.15, len(states)).astype(np.float32)
-        elif self.mode == "misspecified":
+        elif self.mode == "misspecified_scm":
             labels = dict(labels)
-            labels["delta_C_scm"] = labels["delta_C_all"][:, (np.asarray(actions) + 1) % n_actions]
+            wrong_action = (np.asarray(actions) + 1) % n_actions
+            labels["delta_C_scm"] = labels["delta_C_all"][
+                np.arange(len(states)), wrong_action]
         return labels
 
     def icn_calibration_error(self, states, actions, icn_delta_C):
@@ -1173,6 +1195,8 @@ def main(argv=None):
     p.add_argument("--eval-episodes", type=int, default=50)
     p.add_argument("--max-steps",     type=int, default=100)
     p.add_argument("--delay",         type=int, default=5)
+    p.add_argument("--delay-mode",    choices=["immediate", "fixed", "stochastic", "distribution"],
+                   default="immediate")
     p.add_argument("--seeds",         type=int, default=5)
     p.add_argument("--seed",          type=int, default=42)
     p.add_argument("--seed-values",   type=str, default="",

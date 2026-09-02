@@ -3,9 +3,35 @@
 ## Causal Consequence-Penalized Learning
 
 CCPL is a research implementation of constrained reinforcement learning for
-environments in which an action can produce a safety consequence after a
-delay. The package makes the delay explicit in the learning target and keeps
-reward learning separate from constraint learning.
+systems where an action can cause a safety consequence later. It addresses a
+failure mode of ordinary safety RL: assigning a delayed violation to the most
+recent action can train the policy to blame the wrong decision. CCPL makes the
+delay explicit, separates reward from safety learning, and preserves the
+information needed to attribute consequences to actions.
+
+The project delivers an executable research artifact, not only an algorithmic
+description. It includes tested Python components, delayed-cost environments,
+causal consequence utilities, offline audit/evaluation workflows, reproducible
+experiment protocols, and MATLAB robotics demonstrations. Together, these
+pieces turn delayed-safety ideas into inspectable experiments that can be
+reproduced, stress-tested, and adapted to robotics or logged industrial data.
+
+## What CCPL solves
+
+CCPL is designed to solve four practical problems in constrained RL:
+
+1. **Delayed credit assignment:** safety costs are aligned with their delayed
+   source instead of being attached blindly to the latest action.
+2. **Safety objective interference:** reward and constraint critics use separate
+   targets, so safety tuning does not silently rewrite the reward objective.
+3. **Action-level consequence reasoning:** interventional consequence labels and
+   the Consequence Net expose which actions are responsible for risk.
+4. **Deployment evidence gaps:** audit schemas, support checks, hashes, seed
+   records, and offline evaluation reports make safety experiments traceable.
+
+The useful outcome is a controller-development workflow that can answer not
+only “did reward improve?” but also “which actions caused risk, when did the
+risk become visible, and does the policy remain within the stated constraint?”
 
 The method has four implementation components:
 
@@ -28,6 +54,11 @@ universal dominance over a scalar multiplier. Synthetic SCM experiments
 evaluate agreement with programmed structural equations; they do not identify
 causality from observational data.
 
+These boundaries are deliberate. CCPL provides a stronger basis for
+delayed-safety experimentation and diagnosis; it is not, by itself, a safety
+certificate, a causal-identification procedure for arbitrary logs, or permission
+to deploy an unvalidated policy on physical equipment.
+
 ### Implementation flow
 
 ```mermaid
@@ -42,6 +73,51 @@ flowchart LR
     R --> P
     Q --> P
     P --> E
+```
+
+### TikZ architecture source
+
+For papers, reports, and LaTeX documentation, the same architecture is
+available as a TikZ figure. The diagram makes the central contribution
+explicit: delayed safety information is modeled and attributed before it
+changes the policy.
+
+```latex
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+
+\begin{tikzpicture}[
+  node distance=11mm and 13mm,
+  box/.style={draw, rounded corners, align=center, minimum width=28mm,
+              minimum height=9mm, fill=blue!7},
+  safety/.style={box, fill=red!8},
+  data/.style={box, fill=green!8},
+  arrow/.style={->, thick, >=stealth}
+]
+\node[box] (env) {Environment\\$s_t$};
+\node[box, right=of env] (transition) {Delayed transition\\$(s_t,a_t,r_t,c_{t+\tau})$};
+\node[safety, above right=of transition] (delay) {Delay model\\$p(\tau\mid h_t)$};
+\node[data, below right=of transition] (consequence) {Consequence Net\\interventional attribution};
+\node[box, right=28mm of transition] (reward) {Reward critic\\$Q_r$};
+\node[safety, right=of consequence] (constraint) {Safety critic\\$Q_c$};
+\node[safety, right=of delay] (multiplier) {State multiplier\\$\lambda(s)$};
+\node[box, right=28mm of reward] (policy) {CCPL policy\\$\pi(a\mid s)$};
+\node[data, below=of policy] (audit) {Audit and evaluation\\alignment, support, hashes};
+
+\draw[arrow] (env) -- node[above] {$a_t$} (transition);
+\draw[arrow] (transition) -- (delay);
+\draw[arrow] (transition) -- (consequence);
+\draw[arrow] (transition) -- (reward);
+\draw[arrow] (transition) -- (constraint);
+\draw[arrow] (delay) -- (multiplier);
+\draw[arrow] (reward) -- (policy);
+\draw[arrow] (constraint) -- (policy);
+\draw[arrow] (multiplier) -- (policy);
+\draw[arrow] (consequence) -- (policy);
+\draw[arrow] (policy) |- node[pos=.25, right] {$a_t$} (env);
+\draw[arrow, dashed] (transition) |- (audit);
+\draw[arrow, dashed] (policy) -- (audit);
+\end{tikzpicture}
 ```
 
 ## Installation
@@ -100,6 +176,36 @@ control and audit mechanism; it is not a safety certificate.
 
 ## Logged delayed-consequence data
 
+For a real-data audit, use the SWaT/WADI adapter with local CSV exports:
+
+```powershell
+python scripts/evaluate_real_data.py data/swat/sensor.csv `
+  --actuator-file data/swat/actuator.csv `
+  --split test `
+  --output results/swat_wadi_audit.json
+```
+
+To estimate the value of a compatible CCPL checkpoint with fitted-Q
+evaluation, add:
+
+```powershell
+python scripts/evaluate_real_data.py data/swat/sensor.csv `
+  --actuator-file data/swat/actuator.csv `
+  --checkpoint results/ccpl_swat.pkl `
+  --split test `
+  --output results/swat_ccpl_fqe.json
+```
+
+The FQE report includes bootstrap intervals, policy action coverage, and
+minimum logged-action support. It is a model-based offline estimate, not a
+causal identification result or an online safety guarantee.
+
+The report includes dataset summaries, input hashes, observed delay alignment,
+and a latest-visible-action diagnostic. It does not report counterfactual CCPL
+performance from logs alone. That requires a separately specified offline
+policy-evaluation model. Anomaly labels are consequences; they are not causal
+source labels unless the source timestep is explicitly present in the data.
+
 For real logged trajectories, CCPL provides a strict JSONL contract and an
 audit utility. Each record contains an episode identifier, contiguous timestep,
 state vector, action, reward, consequence, timestamp, and terminal flag. Delay
@@ -116,6 +222,30 @@ See [`docs/REAL_DELAY_PROTOCOL.md`](docs/REAL_DELAY_PROTOCOL.md) for the
 schema, validation rules, and the staged offline evaluation protocol. The
 validator prepares real-data experiments; it does not by itself establish
 causal identification or safe deployment.
+
+For an audited offline estimate on a converted logged dataset, run:
+
+```bash
+python scripts/run_real_benchmark.py data/trajectories.jsonl \
+  --policy CCPL=checkpoints/ccpl.pkl \
+  --output results/real_benchmark.json
+```
+
+The benchmark records dataset and checkpoint hashes, action support, fitted-Q
+estimates, and bootstrap intervals. It does not claim counterfactual causal
+effects or replace online safety validation.
+
+To create reproducible offline checkpoints for a logged dataset, fit all six
+policy-labelled behavior-cloning surrogates on the training episodes:
+
+```bash
+python scripts/train_offline_policies.py data/trifinger/eval0906_9994.jsonl \
+  --output-dir checkpoints/trifinger_bc --seed 42
+```
+
+Evaluate only held-out episodes with repeated `--policy NAME=PATH` arguments.
+These checkpoints are offline behavior-cloning baselines, not claims that the
+online PPO, SAC-Lag, CPO-FO, or CCPL optimizers were reproduced offline.
 
 ## Mathematical specification
 
@@ -163,6 +293,27 @@ python ccpl_experiments.py --exp E8 \
   --out results_mujoco
 ```
 
+## MATLAB robotics demonstrations
+
+The repository also contains standalone MATLAB demonstrations that do not
+import the Python package. They connect delayed-safety ideas to robot
+kinematics and Simscape workflows:
+
+- `ccpl_kinova_ccpl_demo.m` runs continuous Kinova Gen3 reaching with live
+  visualization, delayed safety costs, deterministic evaluation, and saved
+  trajectories.
+- `ccpl_atlas_balance_ccpl_demo.m` demonstrates whole-body ATLAS balance using
+  center-of-mass and support-foot metrics.
+- `ccpl_atlas_physical_walker.m` validates ATLAS inertial properties, imports
+  the model into Simscape Multibody, enables torque actuation, and prepares
+  physical foot-contact wiring.
+
+These files make the research ideas easier to inspect in a browser-based
+robotics environment. The Kinova and ATLAS balance files are simulation demos;
+the ATLAS Simscape launcher only reports validated walking after physical
+torque, contact, torso-sensing, and fall-detection interfaces are connected.
+They are not claims of safe physical-robot deployment.
+
 `CPO-FO` is the repository's first-order constrained policy-optimization
 baseline. It is not an exact conjugate-gradient or natural-gradient
 implementation of CPO. See [`docs/CPO_COMPARISON.md`](docs/CPO_COMPARISON.md).
@@ -191,6 +342,13 @@ Read [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md), [`DATA_SPEC.md`](DATA_SPEC.md),
 [`docs/DATA_AND_ARTIFACTS.md`](docs/DATA_AND_ARTIFACTS.md). Every reported
 result should include the exact command, configuration, source revision,
 dependency versions, environment name, and individual seed values.
+
+The strongest contribution of this repository is reproducible evidence around
+delayed safety: tests establish accounting and alignment behavior, benchmark
+commands establish comparative performance, and audit artifacts preserve the
+conditions under which a result was produced. Use the MATLAB demos as
+self-contained extensions of that workflow, with toolbox versions and generated
+model files recorded alongside the results.
 
 ## Tests
 

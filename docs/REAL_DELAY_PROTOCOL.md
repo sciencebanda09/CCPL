@@ -47,5 +47,18 @@ fraction of transitions with aligned consequences and causal labels.
 5. Use an offline policy-evaluation estimator with bootstrap intervals before
    considering a shadow-mode test.
 
+The repository implementation is `scripts/run_real_benchmark.py`. It requires
+explicit checkpoint paths for learned policies, includes a descriptive
+logged-majority-action baseline, records dataset/checkpoint hashes, and emits
+support diagnostics and bootstrap intervals. It must not be used to claim a
+counterfactual causal effect from observational logs.
+
+For continuous real-robot logs, the current discrete CCPL interface requires
+an explicitly documented action discretization. The TriFinger converter uses
+19 actions (neutral plus positive/negative signed axes for nine joints) and
+retains the original torque vector in metadata. Offline checkpoint training is
+behavior cloning; it is valid for a matched representation baseline, but must
+not be reported as online algorithm training.
+
 The current repository's synthetic SCM labels remain a controlled diagnostic.
 They are not evidence that CCPL identifies causality from observational logs.

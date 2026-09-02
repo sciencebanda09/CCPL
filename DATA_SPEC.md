@@ -33,6 +33,20 @@ Safety Gymnasium adapter accepts higher-dimensional observations but does not
 receive synthetic SCM labels. Action indices are zero-based and environment
 specific; every configuration must record `action_dim`.
 
+## Real Logged Data
+
+`ccpl.real_data.SWaTWADI` accepts local SWaT/WADI-style CSV exports and maps
+numeric sensor columns to `state`. Actuator columns are encoded as observed
+action categories; original actuator values remain in metadata. An anomaly
+label becomes an observed consequence label when no explicit consequence
+column is configured. The adapter never creates a `source_timestep` from an
+anomaly label. Source attribution is available only when the log explicitly
+provides an intervention/source field.
+
+Use time-ordered episode splits and retain input file hashes with every report.
+These results are offline logged-data evidence, not proof of causal
+identification or online safety.
+
 ## Artifact Requirements
 
 Generated results belong under a named results directory. Store the command,

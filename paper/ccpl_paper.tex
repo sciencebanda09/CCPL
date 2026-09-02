@@ -550,7 +550,7 @@ are qualitative.}
 
 \section{Limitations and Discussion}
 The strongest limitation is the ICN supervision regime. The simulator exposes
-the SCM and supplies interventional labels, which isolates the attribution
+the SCM and supplies simulator-derived interventional labels, which isolates the attribution
 question but gives the method information unavailable in many real systems.
 An observational-data version would require assumptions or experimental
 interventions sufficient to identify the relevant effect. The paper therefore
@@ -782,6 +782,16 @@ delay predictions; ICN disagreement with SCM labels for rare actions; multiple
 actions jointly contributing to one consequence; and distribution shift beyond
 the states used to calibrate the uncertainty/OOD gate. These failures motivate
 the diagnostics and conservative scope of the paper.
+
+For transfer beyond the controlled suite, the repository defines a separate
+offline protocol for logged industrial control data. A real-data study must
+retain sensor states, actuator actions, timestamps, episode boundaries, and a
+separately defined safety consequence. It uses chronological splits,
+action-support diagnostics, and conservative fitted-Q evaluation with
+bootstrap intervals. Observational anomaly labels are treated as consequences,
+not as causal source labels. Such a study can test operational transfer and
+safety estimation, but cannot by itself establish an interventional causal
+effect or certify deployment.
 
 \section{Optional Ethics Statement}
 All reported controlled experiments use synthetic environments and do not

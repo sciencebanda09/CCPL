@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ccpl-saferoute"))
 
 from ccpl import CCPLAgent, run_episode
-from world import FreightWorldEnv
+from world import District04Env
 
 
 def generate(checkpoint: Path, output: Path, seeds: list[int], delay: int) -> None:
@@ -18,7 +18,7 @@ def generate(checkpoint: Path, output: Path, seeds: list[int], delay: int) -> No
     rollouts = []
     for index, seed in enumerate(seeds):
         agent = copy.deepcopy(base_agent)
-        env = FreightWorldEnv(seed=seed, delay=delay, max_steps=80)
+        env = District04Env(seed=seed, delay=delay, max_steps=180)
         result = run_episode(agent, env, train=False)
         stats = env.episode_stats()
         rollouts.append({
@@ -29,16 +29,21 @@ def generate(checkpoint: Path, output: Path, seeds: list[int], delay: int) -> No
             "cost": float(result["episode_consequence"]),
             "complete": bool(stats["route_complete"]),
             "trace": stats["trace"],
-            "hazards": [list(item) for item in stats["hazards"]],
-            "goal": list(env.goal),
+            "scenario": stats["scenario"],
+            "locations": stats["locations"],
+            "warehouses": stats["warehouses"],
+            "roads": stats["roads"],
+            "events": stats["events"],
+            "scenario_config": stats["scenario_config"],
         })
     payload = {
-        "title": "Delayed Horizon",
-        "source": "CCPL checkpoint rollout in FreightWorldEnv",
+        "title": "District 04: Autonomous Freight Corridor",
+        "source": "CCPL checkpoint rollout in District04Env",
         "checkpoint": str(checkpoint),
         "delay": delay,
         "budget": 3.0,
-        "size": 12,
+        "size": 100,
+        "scenario": "north_freight_corridor",
         "rollouts": rollouts,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -50,7 +55,7 @@ def generate(checkpoint: Path, output: Path, seeds: list[int], delay: int) -> No
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate Delayed Horizon CCPL rollouts")
+    parser = argparse.ArgumentParser(description="Generate District 04 CCPL rollouts")
     parser.add_argument("--checkpoint", required=True, type=Path)
     parser.add_argument("--output", default=Path("data/rollouts.json"), type=Path)
     parser.add_argument("--seeds", default="42,46,146,222,555,777")
