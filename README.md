@@ -75,8 +75,6 @@ flowchart LR
     P --> E
 ```
 
-![CCPL architecture](docs/ccpl_architecture.svg)
-
 ## Installation
 
 The PyPI distribution is `ccpl-rl`; the Python import namespace is `ccpl`.
