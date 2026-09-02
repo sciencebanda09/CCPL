@@ -75,54 +75,7 @@ flowchart LR
     P --> E
 ```
 
-Rendered version for GitHub and web viewers:
-
 ![CCPL architecture](docs/ccpl_architecture.svg)
-
-### TikZ architecture source
-
-For papers, reports, and LaTeX documentation, the same architecture is
-available as a TikZ figure. The diagram makes the central contribution
-explicit: delayed safety information is modeled and attributed before it
-changes the policy.
-
-```latex
-\usepackage{tikz}
-\usetikzlibrary{positioning}
-
-\begin{tikzpicture}[
-  node distance=11mm and 13mm,
-  box/.style={draw, rounded corners, align=center, minimum width=28mm,
-              minimum height=9mm, fill=blue!7},
-  safety/.style={box, fill=red!8},
-  data/.style={box, fill=green!8},
-  arrow/.style={->, thick, >=stealth}
-]
-\node[box] (env) {Environment\\$s_t$};
-\node[box, right=of env] (transition) {Delayed transition\\$(s_t,a_t,r_t,c_{t+\tau})$};
-\node[safety, above right=of transition] (delay) {Delay model\\$p(\tau\mid h_t)$};
-\node[data, below right=of transition] (consequence) {Consequence Net\\interventional attribution};
-\node[box, right=28mm of transition] (reward) {Reward critic\\$Q_r$};
-\node[safety, right=of consequence] (constraint) {Safety critic\\$Q_c$};
-\node[safety, right=of delay] (multiplier) {State multiplier\\$\lambda(s)$};
-\node[box, right=28mm of reward] (policy) {CCPL policy\\$\pi(a\mid s)$};
-\node[data, below=of policy] (audit) {Audit and evaluation\\alignment, support, hashes};
-
-\draw[arrow] (env) -- node[above] {$a_t$} (transition);
-\draw[arrow] (transition) -- (delay);
-\draw[arrow] (transition) -- (consequence);
-\draw[arrow] (transition) -- (reward);
-\draw[arrow] (transition) -- (constraint);
-\draw[arrow] (delay) -- (multiplier);
-\draw[arrow] (reward) -- (policy);
-\draw[arrow] (constraint) -- (policy);
-\draw[arrow] (multiplier) -- (policy);
-\draw[arrow] (consequence) -- (policy);
-\draw[arrow] (policy) |- node[pos=.25, right] {$a_t$} (env);
-\draw[arrow, dashed] (transition) |- (audit);
-\draw[arrow, dashed] (policy) -- (audit);
-\end{tikzpicture}
-```
 
 ## Installation
 
