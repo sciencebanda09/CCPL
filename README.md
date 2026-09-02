@@ -75,6 +75,10 @@ flowchart LR
     P --> E
 ```
 
+Rendered version for GitHub and web viewers:
+
+![CCPL architecture](docs/ccpl_architecture.svg)
+
 ### TikZ architecture source
 
 For papers, reports, and LaTeX documentation, the same architecture is
